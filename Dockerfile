@@ -12,6 +12,5 @@ WORKDIR /app
 COPY --from=build /app/target/planner-backend-0.0.1-SNAPSHOT.jar app.jar
 RUN mkdir -p /app/data
 ENV PLANNER_DATA_DIR=/app/data
-VOLUME ["/app/data"]
 EXPOSE 8080
 ENTRYPOINT ["java","-jar","/app/app.jar"]
