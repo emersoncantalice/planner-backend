@@ -1,4 +1,4 @@
-﻿package com.planner.backend.auth;
+package com.planner.backend.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
