@@ -39,28 +39,32 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        String[] origins = Arrays.stream(corsAllowedOrigins.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isBlank())
+        String[] origins = parseAllowedOrigins()
                 .toArray(String[]::new);
 
         registry.addMapping("/api/**")
-                .allowedOrigins(origins)
+                .allowedOriginPatterns(origins)
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(false)
                 .maxAge(3600);
     }
 
-    @Bean
-    public CorsFilter corsFilter() {
-        List<String> origins = Arrays.stream(corsAllowedOrigins.split(","))
+    private List<String> parseAllowedOrigins() {
+        return Arrays.stream(corsAllowedOrigins.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
+                .map(s -> s.replaceAll("/+$", ""))
+                .distinct()
                 .toList();
+    }
+
+    @Bean
+    public CorsFilter corsFilter() {
+        List<String> origins = parseAllowedOrigins();
 
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(origins);
+        cfg.setAllowedOriginPatterns(origins);
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setExposedHeaders(List.of("X-Auth-Token"));
