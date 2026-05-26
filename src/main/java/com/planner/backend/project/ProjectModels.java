@@ -581,6 +581,21 @@ public final class ProjectModels {
             List<GanttMarker> markers,
             java.util.Map<String, GanttItemMeta> meta) {}
 
+    public record ReplaceOwnershipRequest(
+            String oldValue,
+            String newValue) {}
+
+    public record ReplaceOwnershipResponse(
+            int projetosDonoAtualizados,
+            int cronogramasResponsavelAtualizados,
+            int linhasOrcamentariasDonoAtualizadas,
+            int riscosResponsavelAtualizados,
+            int incidentesResponsavelAtualizados,
+            int debitosResponsavelAtualizados,
+            int indicadoresResponsavelAtualizados,
+            int acoesIndicadorResponsavelAtualizadas,
+            int totalAtualizacoes) {}
+
     // ── Feriados Configuration ────────────────────────────────────────────────
     public record FeriadoEntry(String id, String data, String nome, String tipo) {}
     public record FederalOverrideEntry(String nomeCustom, boolean disabled) {}

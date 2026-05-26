@@ -39,6 +39,19 @@ public class ProjectController {
         return projectService.list(username(req), role(req));
     }
 
+    @PostMapping("/ownership/replace")
+    public ReplaceOwnershipResponse replaceOwnership(@RequestBody ReplaceOwnershipRequest request,
+                                                     HttpServletRequest req) throws IOException {
+        String me = username(req);
+        String r = role(req);
+        if (!"ADMIN".equals(r)) {
+            if (request == null || request.oldValue() == null || !request.oldValue().trim().equalsIgnoreCase(me)) {
+                throw new IllegalArgumentException("Sem permissao para trocar dono de outros usuarios.");
+            }
+        }
+        return projectService.replaceOwnershipReferences(request.oldValue(), request.newValue());
+    }
+
     @PostMapping("/projects")
     public ProjectRecord createProject(@RequestBody CreateProjectRequest request,
                                        HttpServletRequest req) throws IOException {

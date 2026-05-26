@@ -30,6 +30,9 @@ public class FileJsonStore {
         this.objectMapper = objectMapper;
     }
 
+    /** Expose the shared mapper for ad-hoc parsing (e.g. embedded JSON in strings). */
+    public ObjectMapper getObjectMapper() { return objectMapper; }
+
     public <T> List<T> readList(Path path, TypeReference<List<T>> typeReference) throws IOException {
         if (!Files.exists(path)) {
             return List.of();

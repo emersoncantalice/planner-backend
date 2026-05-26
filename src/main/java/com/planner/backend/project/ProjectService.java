@@ -126,6 +126,157 @@ public class ProjectService {
         return project;
     }
 
+    public ReplaceOwnershipResponse replaceOwnershipReferences(String oldValue, String newValue) throws IOException {
+        if (oldValue == null || oldValue.isBlank()) {
+            throw new IllegalArgumentException("Valor atual e obrigatorio.");
+        }
+        if (newValue == null || newValue.isBlank()) {
+            throw new IllegalArgumentException("Novo valor e obrigatorio.");
+        }
+        String oldNorm = oldValue.trim();
+        String newNorm = newValue.trim();
+        int projetosDonoAtualizados = 0;
+        int cronogramasResponsavelAtualizados = 0;
+        int linhasOrcamentariasDonoAtualizadas = 0;
+        int riscosResponsavelAtualizados = 0;
+        int incidentesResponsavelAtualizados = 0;
+        int debitosResponsavelAtualizados = 0;
+        int indicadoresResponsavelAtualizados = 0;
+        int acoesIndicadorResponsavelAtualizadas = 0;
+
+        List<ProjectRecord> projetos = new ArrayList<>(load());
+        for (int i = 0; i < projetos.size(); i++) {
+            ProjectRecord p = projetos.get(i);
+            boolean changed = false;
+            String donoProjeto = p.donoProjeto();
+            if (matchesValue(donoProjeto, oldNorm)) {
+                donoProjeto = newNorm;
+                projetosDonoAtualizados++;
+                changed = true;
+            }
+            List<ScheduleItem> cronograma = new ArrayList<>();
+            for (ScheduleItem item : p.cronograma()) {
+                String responsavel = item.responsavel();
+                if (matchesValue(responsavel, oldNorm)) {
+                    responsavel = newNorm;
+                    cronogramasResponsavelAtualizados++;
+                    changed = true;
+                }
+                cronograma.add(new ScheduleItem(
+                        item.id(), item.titulo(), item.descricao(),
+                        item.inicioPlanejado(), item.fimPlanejado(), item.permiteParalelo(),
+                        item.status(), item.ordem(), item.criadoEm(), item.cor(), responsavel));
+            }
+            if (changed) {
+                projetos.set(i, new ProjectRecord(
+                        p.id(), p.nome(), p.descricao(), p.criadoEm(), p.etapas(), cronograma,
+                        p.alocacoes(), p.financeiro(), p.riscos(), safeReplanList(p.historicoReplanejamento()),
+                        p.situacao(), donoProjeto));
+            }
+        }
+        save(projetos);
+
+        List<BudgetLine> los = new ArrayList<>(loadBudgetLines());
+        for (int i = 0; i < los.size(); i++) {
+            BudgetLine lo = los.get(i);
+            if (matchesValue(lo.dono(), oldNorm)) {
+                los.set(i, new BudgetLine(
+                        lo.id(), lo.codigo(), lo.nome(), lo.ano(), lo.tipo(), lo.centroCusto(),
+                        lo.valorTotal(), lo.criadoEm(), lo.situacao(), newNorm));
+                linhasOrcamentariasDonoAtualizadas++;
+            }
+        }
+        saveBudgetLines(los);
+
+        List<GlobalRisk> riscos = new ArrayList<>(loadGlobalRisks());
+        for (int i = 0; i < riscos.size(); i++) {
+            GlobalRisk r = riscos.get(i);
+            if (matchesValue(r.responsavel(), oldNorm)) {
+                riscos.set(i, new GlobalRisk(
+                        r.id(), r.titulo(), r.descricao(), r.planoAcao(), r.dataFim(), r.status(),
+                        newNorm, r.historico(), r.criadoEm()));
+                riscosResponsavelAtualizados++;
+            }
+        }
+        saveGlobalRisks(riscos);
+
+        List<Incident> incidents = new ArrayList<>(loadIncidents());
+        for (int i = 0; i < incidents.size(); i++) {
+            Incident it = incidents.get(i);
+            if (matchesValue(it.responsavel(), oldNorm)) {
+                incidents.set(i, new Incident(
+                        it.id(), it.titulo(), it.descricao(), it.tipo(), it.severidade(), it.status(),
+                        newNorm, it.dataOcorrencia(), it.dataResolucao(), it.impacto(), it.causaRaiz(),
+                        it.acoesCorrativas(), safeIncidentHistory(it.historico()), it.criadoEm()));
+                incidentesResponsavelAtualizados++;
+            }
+        }
+        saveIncidents(incidents);
+
+        List<TechnicalDebt> debts = new ArrayList<>(loadTechnicalDebts());
+        for (int i = 0; i < debts.size(); i++) {
+            TechnicalDebt d = debts.get(i);
+            if (matchesValue(d.responsavel(), oldNorm)) {
+                debts.set(i, new TechnicalDebt(
+                        d.id(), d.titulo(), d.descricao(), d.categoria(), d.impacto(), d.esforcoEstimado(),
+                        d.prioridade(), d.status(), newNorm, d.projetoRef(), d.dataAlvo(), d.resolvidoEm(),
+                        safeDebtHistory(d.historico()), d.criadoEm()));
+                debitosResponsavelAtualizados++;
+            }
+        }
+        saveTechnicalDebts(debts);
+
+        List<Indicator> indicators = new ArrayList<>(loadIndicators());
+        for (int i = 0; i < indicators.size(); i++) {
+            Indicator ind = indicators.get(i);
+            boolean changed = false;
+            String responsavel = ind.responsavel();
+            if (matchesValue(responsavel, oldNorm)) {
+                responsavel = newNorm;
+                indicadoresResponsavelAtualizados++;
+                changed = true;
+            }
+            List<IndicatorAction> acoes = new ArrayList<>();
+            for (IndicatorAction a : safeIndList(ind.acoes())) {
+                String respAcao = a.responsavel();
+                if (matchesValue(respAcao, oldNorm)) {
+                    respAcao = newNorm;
+                    acoesIndicadorResponsavelAtualizadas++;
+                    changed = true;
+                }
+                acoes.add(new IndicatorAction(
+                        a.id(), a.descricao(), respAcao, a.status(), a.cicloAberto(), a.cicloConcluido(),
+                        a.prazo(), a.concluidoEm(), a.criadoEm()));
+            }
+            if (changed) {
+                indicators.set(i, new Indicator(
+                        ind.id(), ind.titulo(), ind.descricao(), ind.tipo(), ind.categoria(), ind.unidade(),
+                        ind.meta(), ind.polaridade(), ind.frequencia(), responsavel, ind.status(),
+                        safeIndList(ind.ciclos()), acoes, ind.criadoEm()));
+            }
+        }
+        saveIndicators(indicators);
+
+        int total = projetosDonoAtualizados + cronogramasResponsavelAtualizados + linhasOrcamentariasDonoAtualizadas
+                + riscosResponsavelAtualizados + incidentesResponsavelAtualizados + debitosResponsavelAtualizados
+                + indicadoresResponsavelAtualizados + acoesIndicadorResponsavelAtualizadas;
+        return new ReplaceOwnershipResponse(
+                projetosDonoAtualizados,
+                cronogramasResponsavelAtualizados,
+                linhasOrcamentariasDonoAtualizadas,
+                riscosResponsavelAtualizados,
+                incidentesResponsavelAtualizados,
+                debitosResponsavelAtualizados,
+                indicadoresResponsavelAtualizados,
+                acoesIndicadorResponsavelAtualizadas,
+                total);
+    }
+
+    private static boolean matchesValue(String current, String expected) {
+        return current != null && !current.isBlank() && expected != null && !expected.isBlank()
+                && current.trim().equalsIgnoreCase(expected.trim());
+    }
+
     // Legacy overload (for internal/template use)
     public ProjectRecord create(CreateProjectRequest request) throws IOException {
         return create(request, null);
@@ -1193,12 +1344,69 @@ public class ProjectService {
         });
     }
 
+    // ── Gantt etapas parser (mirrors frontend ET_TAG logic) ──────────────────
+    private static final String ET_TAG     = "##ETAPAS:";
+    private static final String ET_TAG_END = "##";
+
+    private List<java.util.Map<String, Object>> extractEtapasFromDesc(String descricao) {
+        if (descricao == null) return List.of();
+        int idx = descricao.indexOf(ET_TAG);
+        if (idx < 0) return List.of();
+        int start = idx + ET_TAG.length();
+        int end = descricao.indexOf(ET_TAG_END, start);
+        if (end < 0) return List.of();
+        try {
+            return jsonStore.getObjectMapper().readValue(
+                    descricao.substring(start, end),
+                    new com.fasterxml.jackson.core.type.TypeReference<List<java.util.Map<String, Object>>>() {});
+        } catch (Exception e) {
+            log.warn("Falha ao parsear etapas embutidas na atividade: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** Effective completion % for a single ScheduleItem, mirroring the Gantt panel logic. */
+    private double effectivePctItem(ScheduleItem item,
+                                    java.util.Map<String, GanttItemMeta> metaMap) {
+        String st = String.valueOf(item.status() != null ? item.status() : "").toUpperCase();
+        if ("CONCLUIDO".equals(st)) return 100.0;
+        List<java.util.Map<String, Object>> etapas = extractEtapasFromDesc(item.descricao());
+        if (!etapas.isEmpty()) {
+            long done = etapas.stream().filter(e -> Boolean.TRUE.equals(e.get("done"))).count();
+            return (done * 100.0) / etapas.size();
+        }
+        GanttItemMeta meta = metaMap.get(item.id());
+        return meta != null ? Math.max(0, Math.min(100, (double) meta.pct())) : 0.0;
+    }
+
     public List<ProjectOverviewResponse> overview(String username, String role) throws IOException {
+        // Load gantt configs once for all projects (avoid per-project I/O in the loop)
+        java.util.Map<String, java.util.Map<String, GanttItemMeta>> ganttMetaByProject =
+                loadGanttConfigs().stream().collect(java.util.stream.Collectors.toMap(
+                        GanttProjectConfig::projectId,
+                        c -> c.meta() != null ? c.meta() : java.util.Map.of(),
+                        (a, b) -> a));
+
         List<ProjectOverviewResponse> out = new ArrayList<>();
         for (ProjectRecord p : list(username, role)) {
-            int concluidas = (int) p.etapas().stream().filter(Step::concluido).count();
+            int etapasConcluidas = (int) p.etapas().stream().filter(Step::concluido).count();
             int totalEtapas = p.etapas().size();
-            int percentualConclusao = totalEtapas == 0 ? 0 : (int) Math.round((concluidas * 100.0) / totalEtapas);
+
+            int percentualConclusao;
+            List<ScheduleItem> cronograma = p.cronograma() != null ? p.cronograma() : List.of();
+            if (cronograma.isEmpty()) {
+                // No activities yet: fall back to checklist steps
+                percentualConclusao = totalEtapas == 0 ? 0
+                        : (int) Math.round((etapasConcluidas * 100.0) / totalEtapas);
+            } else {
+                java.util.Map<String, GanttItemMeta> metaMap =
+                        ganttMetaByProject.getOrDefault(p.id(), java.util.Map.of());
+                double sum = cronograma.stream()
+                        .mapToDouble(item -> effectivePctItem(item, metaMap))
+                        .sum();
+                percentualConclusao = (int) Math.round(sum / cronograma.size());
+            }
+
             String status = percentualConclusao >= 100 ? "CONCLUIDO" : (percentualConclusao >= 50 ? "EM_ANDAMENTO" : "PLANEJADO");
             BigDecimal custoEquipe = p.alocacoes().stream()
                     .map(Allocation::custoPlanejado)
@@ -1212,7 +1420,7 @@ public class ProjectService {
                     status,
                     percentualConclusao,
                     totalEtapas,
-                    concluidas,
+                    etapasConcluidas,
                     p.alocacoes().size(),
                     custoEquipe,
                     receitas,

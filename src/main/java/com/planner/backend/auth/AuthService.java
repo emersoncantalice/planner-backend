@@ -3,6 +3,7 @@ package com.planner.backend.auth;
 import static com.planner.backend.auth.AuthModels.*;
 
 import com.planner.backend.application.port.AuthStorePort;
+import com.planner.backend.project.ProjectService;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -29,11 +30,15 @@ public class AuthService {
     private static final String STATUS_PENDING  = "PENDING";
 
     private final AuthStorePort authStorePort;
+    private final ProjectService projectService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final Path profileImagesDir;
 
-    public AuthService(AuthStorePort authStorePort, @Value("${planner.data-dir:data}") String dataDir) {
+    public AuthService(AuthStorePort authStorePort,
+                       ProjectService projectService,
+                       @Value("${planner.data-dir:data}") String dataDir) {
         this.authStorePort = authStorePort;
+        this.projectService = projectService;
         this.profileImagesDir = resolveProfileImagesDir(dataDir);
     }
 
@@ -159,11 +164,20 @@ public class AuthService {
         if (usernameInUse) throw new IllegalArgumentException("Ja existe usuario com esse username.");
 
         UserRecord cur = users.get(idx);
+        String oldNome = safeNome(cur);
         UserRecord updated = new UserRecord(newUsername, newNome, cur.passwordHash(), cur.createdAt(),
                 safeRole(cur), safeStatus(cur), cur.email());
         users.set(idx, updated);
         saveUsers(users);
         if (!usernamesMatch(currentUsername, newUsername)) moveProfileImage(currentUsername, newUsername);
+
+        // Propaga vinculos de dono/responsavel em dados de projeto.
+        if (!usernamesMatch(currentUsername, newUsername)) {
+            projectService.replaceOwnershipReferences(currentUsername, newUsername);
+        }
+        if (!oldNome.equalsIgnoreCase(newNome)) {
+            projectService.replaceOwnershipReferences(oldNome, newNome);
+        }
 
         List<SessionRecord> sessions = new ArrayList<>(loadSessions());
         boolean changed = false;
