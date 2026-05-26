@@ -54,6 +54,48 @@ public class FileJsonStore {
         }
     }
 
+    /** Read a single JSON object from a file. Returns {@code null} if the file is absent or empty. */
+    public <T> T readObject(Path path, TypeReference<T> typeReference) throws IOException {
+        if (!Files.exists(path)) return null;
+        if (Files.size(path) == 0L) return null;
+        try {
+            return objectMapper.readValue(path.toFile(), typeReference);
+        } catch (IOException ex) {
+            Path backup = path.resolveSibling(path.getFileName() + ".corrupted-" +
+                    OffsetDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + ".json");
+            try {
+                Files.move(path, backup, StandardCopyOption.REPLACE_EXISTING);
+                log.error("Arquivo de dados (objeto) corrompido movido para backup: {} -> {}. Retornando null.", path, backup, ex);
+            } catch (IOException moveEx) {
+                log.error("Arquivo de dados (objeto) corrompido em {}, nao foi possivel mover para backup ({}). Retornando null.",
+                        path, moveEx.getMessage(), ex);
+            }
+            return null;
+        }
+    }
+
+    /** Write a single JSON object atomically, replacing the file. */
+    public <T> void writeObject(Path path, T value) throws IOException {
+        Path parent = path.getParent();
+        if (parent != null) Files.createDirectories(parent);
+        Path normalizedPath = path.toAbsolutePath().normalize();
+        Object lock = PATH_LOCKS.computeIfAbsent(normalizedPath, ignored -> new Object());
+        synchronized (lock) {
+            Path temp = normalizedPath.resolveSibling(normalizedPath.getFileName() + ".tmp-" + UUID.randomUUID());
+            try {
+                String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(value);
+                Files.writeString(temp, json, StandardCharsets.UTF_8);
+                moveTempFile(temp, normalizedPath);
+            } finally {
+                try {
+                    Files.deleteIfExists(temp);
+                } catch (IOException cleanupEx) {
+                    log.warn("Falha ao limpar arquivo temporario {}: {}", temp, cleanupEx.getMessage());
+                }
+            }
+        }
+    }
+
     public <T> void writeList(Path path, List<T> values) throws IOException {
         Path parent = path.getParent();
         if (parent != null) {

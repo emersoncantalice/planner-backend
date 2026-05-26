@@ -250,6 +250,59 @@ public class ProjectController {
         return projectService.upsertMonthlyHours(month, request);
     }
 
+    @GetMapping("/allocation-payments")
+    public List<AllocationPaymentState> listAllocationPayments() throws IOException {
+        return projectService.listAllocationPayments();
+    }
+
+    @PutMapping("/allocation-payments/{allocationId}/{month}")
+    public AllocationPaymentState upsertAllocationPayment(
+            @PathVariable String allocationId,
+            @PathVariable int month,
+            @RequestBody UpdateAllocationPaymentRequest request,
+            HttpServletRequest req) throws IOException {
+        boolean paid = request != null && Boolean.TRUE.equals(request.paid());
+        return projectService.upsertAllocationPayment(allocationId, month, paid, username(req));
+    }
+
+    @GetMapping("/lo-presence")
+    public List<LoPresenceState> listLoPresence() throws IOException {
+        return projectService.listLoPresence();
+    }
+
+    @PutMapping("/lo-presence")
+    public LoPresenceState upsertLoPresence(
+            @RequestBody UpsertLoPresenceRequest request,
+            HttpServletRequest req) throws IOException {
+        return projectService.upsertLoPresence(request != null ? request.loId() : null, username(req));
+    }
+
+    @GetMapping("/allocation-monthly-state")
+    public List<AllocationMonthlyState> listAllocationMonthlyStates() throws IOException {
+        return projectService.listAllocationMonthlyStates();
+    }
+
+    @PutMapping("/allocation-monthly-state/{allocationId}/{month}")
+    public AllocationMonthlyState upsertAllocationMonthlyState(
+            @PathVariable String allocationId,
+            @PathVariable int month,
+            @RequestBody UpdateAllocationMonthlyStateRequest request,
+            HttpServletRequest req) throws IOException {
+        return projectService.upsertAllocationMonthlyState(allocationId, month, request, username(req));
+    }
+
+    @GetMapping("/allocation-cursors")
+    public List<AllocationCursorState> listAllocationCursors(@RequestParam(required = false) String loId) throws IOException {
+        return projectService.listAllocationCursors(loId);
+    }
+
+    @PutMapping("/allocation-cursors")
+    public AllocationCursorState upsertAllocationCursor(
+            @RequestBody UpsertAllocationCursorRequest request,
+            HttpServletRequest req) throws IOException {
+        return projectService.upsertAllocationCursor(request, username(req));
+    }
+
     @GetMapping("/consultancies")
     public List<Consultancy> listConsultancies() throws IOException {
         return projectService.listConsultancies();
@@ -517,6 +570,30 @@ public class ProjectController {
     @GetMapping("/reports/project/{projectId}")
     public ProjectRecord projectReport(@PathVariable String projectId) throws IOException {
         return projectService.getById(projectId);
+    }
+
+    // ── Feriados config ───────────────────────────────────────────────────────
+    @GetMapping("/feriados")
+    public FeriadosConfig getFeriados() throws IOException {
+        return projectService.getFeriadosConfig();
+    }
+
+    @PutMapping("/feriados")
+    public FeriadosConfig saveFeriados(@RequestBody FeriadosConfig config) throws IOException {
+        return projectService.saveFeriadosConfig(config);
+    }
+
+    // ── Gantt config ──────────────────────────────────────────────────────────
+    @GetMapping("/gantt-configs/{projectId}")
+    public GanttProjectConfig getGanttConfig(@PathVariable String projectId) throws IOException {
+        return projectService.getGanttConfig(projectId);
+    }
+
+    @PutMapping("/gantt-configs/{projectId}")
+    public GanttProjectConfig saveGanttConfig(
+            @PathVariable String projectId,
+            @RequestBody SaveGanttConfigRequest request) throws IOException {
+        return projectService.saveGanttConfig(projectId, request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

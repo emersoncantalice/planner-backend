@@ -350,6 +350,48 @@ public final class ProjectModels {
 
     public record ImportCsvResponse(int criados, int ignorados) {}
 
+    public record AllocationPaymentState(
+            String allocationId,
+            int month,
+            boolean paid,
+            OffsetDateTime updatedAt,
+            String updatedBy) {}
+
+    public record UpdateAllocationPaymentRequest(Boolean paid) {}
+
+    public record LoPresenceState(
+            String loId,
+            String username,
+            OffsetDateTime updatedAt) {}
+
+    public record UpsertLoPresenceRequest(String loId) {}
+
+    public record AllocationMonthlyState(
+            String allocationId,
+            int month,
+            Boolean canceled,
+            BigDecimal manualValue,
+            BigDecimal manualPercent,
+            OffsetDateTime updatedAt,
+            String updatedBy) {}
+
+    public record UpdateAllocationMonthlyStateRequest(
+            Boolean canceled,
+            BigDecimal manualValue,
+            BigDecimal manualPercent) {}
+
+    public record AllocationCursorState(
+            String username,
+            String loId,
+            BigDecimal x,
+            BigDecimal y,
+            OffsetDateTime updatedAt) {}
+
+    public record UpsertAllocationCursorRequest(
+            String loId,
+            BigDecimal x,
+            BigDecimal y) {}
+
     public record MonthlyHours(
             int mes,
             BigDecimal horas,
@@ -527,4 +569,23 @@ public final class ProjectModels {
             Double valor,
             String observacao,
             OffsetDateTime dataReferencia) {}
+
+    // ── Gantt Configuration ───────────────────────────────────────────────────
+    public record GanttMarker(String id, String label, String date, String description) {}
+    public record GanttItemMeta(String responsavel, int pct) {}
+    public record GanttProjectConfig(
+            String projectId,
+            List<GanttMarker> markers,
+            java.util.Map<String, GanttItemMeta> meta) {}
+    public record SaveGanttConfigRequest(
+            List<GanttMarker> markers,
+            java.util.Map<String, GanttItemMeta> meta) {}
+
+    // ── Feriados Configuration ────────────────────────────────────────────────
+    public record FeriadoEntry(String id, String data, String nome, String tipo) {}
+    public record FederalOverrideEntry(String nomeCustom, boolean disabled) {}
+    public record FeriadosConfig(
+            List<FeriadoEntry> feriados,
+            java.util.Map<String, FederalOverrideEntry> federalOverrides,
+            List<Boolean> diasUteis) {}
 }

@@ -36,6 +36,12 @@ public class ProjectService {
     private final java.nio.file.Path incidentsPath;
     private final java.nio.file.Path technicalDebtsPath;
     private final java.nio.file.Path indicatorsPath;
+    private final java.nio.file.Path allocationPaymentsPath;
+    private final java.nio.file.Path loPresencePath;
+    private final java.nio.file.Path allocationMonthlyStatePath;
+    private final java.nio.file.Path allocationCursorsPath;
+    private final java.nio.file.Path feriadosPath;
+    private final java.nio.file.Path ganttConfigsPath;
     private final com.planner.backend.auth.FileJsonStore jsonStore;
 
     public ProjectService(
@@ -58,6 +64,12 @@ public class ProjectService {
         this.incidentsPath      = java.nio.file.Path.of(dataDir, "incidents.json");
         this.technicalDebtsPath = java.nio.file.Path.of(dataDir, "technical-debts.json");
         this.indicatorsPath     = java.nio.file.Path.of(dataDir, "indicators.json");
+        this.allocationPaymentsPath = java.nio.file.Path.of(dataDir, "allocation-payments.json");
+        this.loPresencePath = java.nio.file.Path.of(dataDir, "lo-presence.json");
+        this.allocationMonthlyStatePath = java.nio.file.Path.of(dataDir, "allocation-monthly-state.json");
+        this.allocationCursorsPath = java.nio.file.Path.of(dataDir, "allocation-cursors.json");
+        this.feriadosPath = java.nio.file.Path.of(dataDir, "feriados.json");
+        this.ganttConfigsPath = java.nio.file.Path.of(dataDir, "gantt-configs.json");
         ensureDataFiles();
     }
 
@@ -1565,6 +1577,147 @@ public class ProjectService {
         return hours;
     }
 
+    public List<AllocationPaymentState> listAllocationPayments() throws IOException {
+        List<AllocationPaymentState> all = new ArrayList<>(loadAllocationPayments());
+        all.sort(Comparator
+                .comparing(AllocationPaymentState::allocationId, Comparator.nullsLast(String::compareTo))
+                .thenComparingInt(AllocationPaymentState::month));
+        return all;
+    }
+
+    public AllocationPaymentState upsertAllocationPayment(String allocationId, int month, boolean paid, String username) throws IOException {
+        if (allocationId == null || allocationId.isBlank()) {
+            throw new IllegalArgumentException("AllocationId e obrigatorio.");
+        }
+        if (month < 0 || month > 11) {
+            throw new IllegalArgumentException("Mes invalido. Use 0..11.");
+        }
+        String user = username == null ? "" : username;
+        AllocationPaymentState updated = new AllocationPaymentState(
+                allocationId.trim(),
+                month,
+                paid,
+                OffsetDateTime.now(),
+                user);
+
+        List<AllocationPaymentState> all = new ArrayList<>(loadAllocationPayments());
+        boolean replaced = false;
+        for (int i = 0; i < all.size(); i++) {
+            AllocationPaymentState curr = all.get(i);
+            if (allocationId.trim().equals(curr.allocationId()) && month == curr.month()) {
+                all.set(i, updated);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) all.add(updated);
+        saveAllocationPayments(all);
+        return updated;
+    }
+
+    public List<LoPresenceState> listLoPresence() throws IOException {
+        OffsetDateTime cutoff = OffsetDateTime.now().minusSeconds(30);
+        List<LoPresenceState> all = new ArrayList<>(loadLoPresence());
+        List<LoPresenceState> active = all.stream()
+                .filter(p -> p != null && p.updatedAt() != null && p.updatedAt().isAfter(cutoff))
+                .sorted(Comparator
+                        .comparing(LoPresenceState::loId, Comparator.nullsLast(String::compareTo))
+                        .thenComparing(LoPresenceState::username, Comparator.nullsLast(String::compareTo)))
+                .toList();
+        if (active.size() != all.size()) saveLoPresence(new ArrayList<>(active));
+        return active;
+    }
+
+    public LoPresenceState upsertLoPresence(String loId, String username) throws IOException {
+        if (loId == null || loId.isBlank()) throw new IllegalArgumentException("LoId e obrigatorio.");
+        if (username == null || username.isBlank()) throw new IllegalArgumentException("Usuario nao autenticado.");
+        String lo = loId.trim();
+        String user = username.trim();
+        LoPresenceState updated = new LoPresenceState(lo, user, OffsetDateTime.now());
+        List<LoPresenceState> all = new ArrayList<>(loadLoPresence());
+        all.removeIf(p -> p != null && lo.equals(p.loId()) && user.equalsIgnoreCase(p.username()));
+        all.add(updated);
+        saveLoPresence(all);
+        return updated;
+    }
+
+    public List<AllocationMonthlyState> listAllocationMonthlyStates() throws IOException {
+        List<AllocationMonthlyState> all = new ArrayList<>(loadAllocationMonthlyStates());
+        all.sort(Comparator
+                .comparing(AllocationMonthlyState::allocationId, Comparator.nullsLast(String::compareTo))
+                .thenComparingInt(AllocationMonthlyState::month));
+        return all;
+    }
+
+    public AllocationMonthlyState upsertAllocationMonthlyState(
+            String allocationId,
+            int month,
+            UpdateAllocationMonthlyStateRequest request,
+            String username) throws IOException {
+        if (allocationId == null || allocationId.isBlank()) throw new IllegalArgumentException("AllocationId e obrigatorio.");
+        if (month < 0 || month > 11) throw new IllegalArgumentException("Mes invalido. Use 0..11.");
+        String user = username == null ? "" : username.trim();
+        String alloc = allocationId.trim();
+        BigDecimal manualValue = request != null ? request.manualValue() : null;
+        BigDecimal manualPercent = request != null ? request.manualPercent() : null;
+        AllocationMonthlyState updated = new AllocationMonthlyState(
+                alloc,
+                month,
+                request != null ? request.canceled() : null,
+                manualValue,
+                manualPercent,
+                OffsetDateTime.now(),
+                user);
+        List<AllocationMonthlyState> all = new ArrayList<>(loadAllocationMonthlyStates());
+        boolean replaced = false;
+        for (int i = 0; i < all.size(); i++) {
+            AllocationMonthlyState curr = all.get(i);
+            if (alloc.equals(curr.allocationId()) && month == curr.month()) {
+                all.set(i, updated);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) all.add(updated);
+        saveAllocationMonthlyStates(all);
+        return updated;
+    }
+
+    public List<AllocationCursorState> listAllocationCursors(String loId) throws IOException {
+        OffsetDateTime cutoff = OffsetDateTime.now().minusSeconds(10);
+        String filterLo = loId == null ? "" : loId.trim();
+        List<AllocationCursorState> all = new ArrayList<>(loadAllocationCursors());
+        List<AllocationCursorState> active = all.stream()
+                .filter(c -> c != null && c.updatedAt() != null && c.updatedAt().isAfter(cutoff))
+                .filter(c -> filterLo.isBlank() || filterLo.equals(c.loId()))
+                .sorted(Comparator.comparing(AllocationCursorState::username, Comparator.nullsLast(String::compareTo)))
+                .toList();
+        if (active.size() != all.size()) saveAllocationCursors(new ArrayList<>(active));
+        return active;
+    }
+
+    public AllocationCursorState upsertAllocationCursor(UpsertAllocationCursorRequest request, String username) throws IOException {
+        if (request == null || request.loId() == null || request.loId().isBlank()) {
+            throw new IllegalArgumentException("LoId e obrigatorio.");
+        }
+        if (request.x() == null || request.y() == null) {
+            throw new IllegalArgumentException("Posicao do cursor e obrigatoria.");
+        }
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Usuario nao autenticado.");
+        }
+        BigDecimal x = request.x().max(BigDecimal.ZERO).min(BigDecimal.ONE);
+        BigDecimal y = request.y().max(BigDecimal.ZERO).min(BigDecimal.ONE);
+        String lo = request.loId().trim();
+        String user = username.trim();
+        AllocationCursorState updated = new AllocationCursorState(user, lo, x, y, OffsetDateTime.now());
+        List<AllocationCursorState> all = new ArrayList<>(loadAllocationCursors());
+        all.removeIf(c -> c != null && user.equalsIgnoreCase(c.username()) && lo.equals(c.loId()));
+        all.add(updated);
+        saveAllocationCursors(all);
+        return updated;
+    }
+
     public MonthlyHours upsertMonthlyHours(int month, UpsertMonthlyHoursRequest request) throws IOException {
         if (month < 1 || month > 12) throw new IllegalArgumentException("Mes invalido. Use 1..12.");
         if (request == null || request.horas() == null || request.horas().compareTo(BigDecimal.ZERO) <= 0) {
@@ -2319,6 +2472,38 @@ public class ProjectService {
         jsonStore.writeList(monthlyHoursPath, hours);
     }
 
+    private List<AllocationPaymentState> loadAllocationPayments() throws IOException {
+        return jsonStore.readList(allocationPaymentsPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveAllocationPayments(List<AllocationPaymentState> states) throws IOException {
+        jsonStore.writeList(allocationPaymentsPath, states);
+    }
+
+    private List<LoPresenceState> loadLoPresence() throws IOException {
+        return jsonStore.readList(loPresencePath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveLoPresence(List<LoPresenceState> states) throws IOException {
+        jsonStore.writeList(loPresencePath, states);
+    }
+
+    private List<AllocationMonthlyState> loadAllocationMonthlyStates() throws IOException {
+        return jsonStore.readList(allocationMonthlyStatePath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveAllocationMonthlyStates(List<AllocationMonthlyState> states) throws IOException {
+        jsonStore.writeList(allocationMonthlyStatePath, states);
+    }
+
+    private List<AllocationCursorState> loadAllocationCursors() throws IOException {
+        return jsonStore.readList(allocationCursorsPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveAllocationCursors(List<AllocationCursorState> states) throws IOException {
+        jsonStore.writeList(allocationCursorsPath, states);
+    }
+
     private List<Consultancy> loadConsultancies() throws IOException {
         return jsonStore.readList(consultanciesPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
     }
@@ -2333,6 +2518,64 @@ public class ProjectService {
 
     private void saveFocalPoints(List<FocalPoint> focalPoints) throws IOException {
         jsonStore.writeList(focalPointsPath, focalPoints);
+    }
+
+    // ── Feriados ──────────────────────────────────────────────────────────────
+
+    private static final java.util.List<Boolean> DEFAULT_DIAS_UTEIS =
+            java.util.List.of(false, true, true, true, true, true, false);
+
+    public FeriadosConfig getFeriadosConfig() throws IOException {
+        FeriadosConfig cfg = jsonStore.readObject(feriadosPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+        return new FeriadosConfig(
+                cfg == null || cfg.feriados() == null ? new ArrayList<>() : cfg.feriados(),
+                cfg == null || cfg.federalOverrides() == null ? new java.util.HashMap<>() : cfg.federalOverrides(),
+                cfg == null || cfg.diasUteis() == null ? DEFAULT_DIAS_UTEIS : cfg.diasUteis());
+    }
+
+    public FeriadosConfig saveFeriadosConfig(FeriadosConfig config) throws IOException {
+        FeriadosConfig toSave = new FeriadosConfig(
+                config == null || config.feriados() == null ? new ArrayList<>() : config.feriados(),
+                config == null || config.federalOverrides() == null ? new java.util.HashMap<>() : config.federalOverrides(),
+                config == null || config.diasUteis() == null ? DEFAULT_DIAS_UTEIS : config.diasUteis());
+        jsonStore.writeObject(feriadosPath, toSave);
+        return toSave;
+    }
+
+    // ── Gantt Configuration ───────────────────────────────────────────────────
+
+    public GanttProjectConfig getGanttConfig(String projectId) throws IOException {
+        return loadGanttConfigs().stream()
+                .filter(c -> projectId.equals(c.projectId()))
+                .findFirst()
+                .orElse(new GanttProjectConfig(projectId, new ArrayList<>(), new java.util.HashMap<>()));
+    }
+
+    public GanttProjectConfig saveGanttConfig(String projectId, SaveGanttConfigRequest request) throws IOException {
+        GanttProjectConfig newConfig = new GanttProjectConfig(
+                projectId,
+                request == null || request.markers() == null ? new ArrayList<>() : request.markers(),
+                request == null || request.meta() == null ? new java.util.HashMap<>() : request.meta());
+        List<GanttProjectConfig> all = new ArrayList<>(loadGanttConfigs());
+        boolean replaced = false;
+        for (int i = 0; i < all.size(); i++) {
+            if (projectId.equals(all.get(i).projectId())) {
+                all.set(i, newConfig);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) all.add(newConfig);
+        saveGanttConfigs(all);
+        return newConfig;
+    }
+
+    private List<GanttProjectConfig> loadGanttConfigs() throws IOException {
+        return jsonStore.readList(ganttConfigsPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveGanttConfigs(List<GanttProjectConfig> configs) throws IOException {
+        jsonStore.writeList(ganttConfigsPath, configs);
     }
 
     private void ensureDataFiles() {
@@ -2351,6 +2594,12 @@ public class ProjectService {
             ensureFile(incidentsPath);
             ensureFile(technicalDebtsPath);
             ensureFile(indicatorsPath);
+            ensureFile(allocationPaymentsPath);
+            ensureFile(loPresencePath);
+            ensureFile(allocationMonthlyStatePath);
+            ensureFile(allocationCursorsPath);
+            ensureFile(ganttConfigsPath);
+            ensureFileObject(feriadosPath);
         } catch (IOException ex) {
             throw new IllegalStateException("Falha ao inicializar arquivos de dados.", ex);
         }
@@ -2363,6 +2612,15 @@ public class ProjectService {
             Files.createDirectories(parent);
         }
         Files.writeString(path, "[]", StandardCharsets.UTF_8);
+    }
+
+    private void ensureFileObject(java.nio.file.Path path) throws IOException {
+        if (Files.exists(path)) return;
+        java.nio.file.Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.writeString(path, "{}", StandardCharsets.UTF_8);
     }
 
     private void validatePersonRequest(CreatePersonRequest request) {

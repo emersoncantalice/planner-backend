@@ -41,14 +41,18 @@ public class DataFilesInitializer implements ApplicationRunner {
                 "absences.json",
                 "incidents.json",
                 "technical-debts.json",
-                "indicators.json");
+                "indicators.json",
+                "gantt-configs.json");
 
         for (String fileName : requiredFiles) {
-            ensureFile(Path.of(dataDir, fileName));
+            ensureFile(Path.of(dataDir, fileName), "[]");
         }
+
+        // Feriados config is a single JSON object, not a list
+        ensureFile(Path.of(dataDir, "feriados.json"), "{}");
     }
 
-    private void ensureFile(Path path) throws IOException {
+    private void ensureFile(Path path, String defaultContent) throws IOException {
         if (Files.exists(path)) {
             return;
         }
@@ -56,7 +60,7 @@ public class DataFilesInitializer implements ApplicationRunner {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        Files.writeString(path, "[]", StandardCharsets.UTF_8);
+        Files.writeString(path, defaultContent, StandardCharsets.UTF_8);
         log.info("Arquivo de dados criado automaticamente: {}", path);
     }
 }
