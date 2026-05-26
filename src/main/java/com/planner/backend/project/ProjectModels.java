@@ -264,6 +264,14 @@ public final class ProjectModels {
             String situacao,
             String donoProjeto) {}
 
+    /** Uma entrada no histórico de vagas de uma pessoa. */
+    public record VagaHistorico(
+            String alias,   // e.g. "VAG0031164"
+            String url,     // URL da vaga (pode ser null)
+            String inicio,  // "yyyy-MM-dd" ou null
+            String fim)     // "yyyy-MM-dd" ou null
+    {}
+
     public record Person(
             String id,
             String nome,
@@ -278,6 +286,7 @@ public final class ProjectModels {
             String dataNascimento,   // "yyyy-MM-dd" or null
             String contato,          // phone / e-mail or null
             Boolean ativo,           // null in legacy records = treat as true
+            java.util.List<VagaHistorico> vagasAnteriores, // histórico de vagas; null em registros legados
             OffsetDateTime criadoEm) {}
 
     public record CreatePersonRequest(
@@ -291,7 +300,8 @@ public final class ProjectModels {
             String vagaAlias,
             String dataNascimento,
             String contato,
-            boolean ativo) {}
+            boolean ativo,
+            java.util.List<VagaHistorico> vagasAnteriores) {}
 
     // ── Ausências / férias ───────────────────────────────────────────────────
     public record Absence(

@@ -437,6 +437,16 @@ public class ProjectService {
         boolean removed = all.removeIf(lo -> lo.id().equals(budgetLineId));
         if (!removed) throw new IllegalArgumentException("LO nao encontrada.");
         saveBudgetLines(all);
+
+        // Cascade: remove todas as alocações vinculadas a esta LO
+        List<BudgetAllocation> allocations = new ArrayList<>(loadBudgetAllocations());
+        allocations.removeIf(a -> budgetLineId.equals(a.linhaOrcamentariaId()));
+        saveBudgetAllocations(allocations);
+
+        // Cascade: remove todos os ajustes vinculados a esta LO
+        List<BudgetLineAdjustment> adjustments = new ArrayList<>(loadBudgetLineAdjustments());
+        adjustments.removeIf(a -> budgetLineId.equals(a.budgetLineId()));
+        saveBudgetLineAdjustments(adjustments);
     }
 
     public List<BudgetLineAdjustment> listBudgetLineAdjustments() throws IOException {
@@ -1202,6 +1212,7 @@ public class ProjectService {
                 p.tipoVinculo(), p.consultoria(), p.valorHora(), p.valorMensal(),
                 p.vagaUrl(), p.vagaAlias(), p.dataNascimento(), p.contato(),
                 true,  // legacy records default to active
+                p.vagasAnteriores() != null ? p.vagasAnteriores() : java.util.List.of(),
                 p.criadoEm());
     }
 
@@ -1397,6 +1408,7 @@ public class ProjectService {
                 request.dataNascimento() == null ? null : request.dataNascimento().trim(),
                 request.contato() == null ? null : request.contato().trim(),
                 request.ativo(),
+                request.vagasAnteriores() != null ? request.vagasAnteriores() : java.util.List.of(),
                 OffsetDateTime.now());
         List<Person> all = new ArrayList<>(loadPeople());
         all.add(created);
@@ -1430,6 +1442,8 @@ public class ProjectService {
                         request.dataNascimento() == null ? p.dataNascimento() : request.dataNascimento().trim(),
                         request.contato() == null ? p.contato() : request.contato().trim(),
                         request.ativo(),
+                        request.vagasAnteriores() != null ? request.vagasAnteriores()
+                                : (p.vagasAnteriores() != null ? p.vagasAnteriores() : java.util.List.of()),
                         p.criadoEm());
                 all.set(i, updated);
                 savePeople(all);
@@ -1441,9 +1455,46 @@ public class ProjectService {
 
     public void deletePerson(String personId) throws IOException {
         List<Person> all = new ArrayList<>(loadPeople());
-        boolean removed = all.removeIf(p -> p.id().equals(personId));
-        if (!removed) throw new IllegalArgumentException("Pessoa nao encontrada.");
+        // Find and remove the person
+        Person deleted = all.stream()
+                .filter(p -> p.id().equals(personId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Pessoa nao encontrada."));
+        all.remove(deleted);
         savePeople(all);
+
+        // Cascade: desassocia o responsavel das atividades de cronograma
+        String nome = deleted.nome();
+        List<ProjectRecord> projects = new ArrayList<>(load());
+        boolean projChanged = false;
+        for (int pi = 0; pi < projects.size(); pi++) {
+            ProjectRecord proj = projects.get(pi);
+            List<ScheduleItem> items = proj.cronograma();
+            if (items == null || items.isEmpty()) continue;
+            List<ScheduleItem> newItems = new ArrayList<>(items.size());
+            boolean itemChanged = false;
+            for (ScheduleItem item : items) {
+                if (nome != null && nome.equals(item.responsavel())) {
+                    newItems.add(new ScheduleItem(
+                            item.id(), item.titulo(), item.descricao(),
+                            item.inicioPlanejado(), item.fimPlanejado(),
+                            item.permiteParalelo(), item.status(), item.ordem(),
+                            item.criadoEm(), item.cor(), null));
+                    itemChanged = true;
+                } else {
+                    newItems.add(item);
+                }
+            }
+            if (itemChanged) {
+                projects.set(pi, new ProjectRecord(
+                        proj.id(), proj.nome(), proj.descricao(), proj.criadoEm(),
+                        proj.etapas(), newItems, proj.alocacoes(), proj.financeiro(),
+                        proj.riscos(), safeReplanList(proj.historicoReplanejamento()),
+                        proj.situacao(), proj.donoProjeto()));
+                projChanged = true;
+            }
+        }
+        if (projChanged) save(projects);
     }
 
     public ImportPeopleCsvResponse importPeopleCsv(ImportPeopleCsvRequest request) throws IOException {
