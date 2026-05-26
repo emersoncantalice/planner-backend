@@ -73,23 +73,25 @@ public class ProjectService {
         ensureDataFiles();
     }
 
-    /** Returns projects visible to the given user: admin sees all; user sees own. */
+    /**
+     * Returns projects visible to the given user.
+     *  - ADMIN: all published + own drafts + ownerless drafts (legacy)
+     *  - Regular user: own projects (any status) + other users' published projects + ownerless
+     */
     public List<ProjectRecord> list(String username, String role) throws IOException {
         List<ProjectRecord> all = load();
         if ("ADMIN".equals(role)) {
-            // Admin sees:
-            // - all published projects
-            // - own drafts
-            // - ownerless drafts (legacy/imported/shared records)
             return all.stream()
                     .filter(p -> !"DRAFT".equals(p.situacao())
                             || p.donoProjeto() == null
                             || username.equalsIgnoreCase(p.donoProjeto()))
                     .toList();
         }
-        // Regular user: sees only their own projects (any situacao)
+        // Regular user: own projects (any status) OR ownerless OR published by anyone
         return all.stream()
-                .filter(p -> p.donoProjeto() == null || username.equalsIgnoreCase(p.donoProjeto()))
+                .filter(p -> p.donoProjeto() == null
+                        || username.equalsIgnoreCase(p.donoProjeto())
+                        || !"DRAFT".equals(p.situacao()))
                 .toList();
     }
 
@@ -310,6 +312,11 @@ public class ProjectService {
         saveProfiles(all);
     }
 
+    /**
+     * Returns budget lines visible to the given user.
+     *  - ADMIN: all published + own drafts + ownerless
+     *  - Regular user: own LOs (any status) + other users' published LOs + ownerless
+     */
     public List<BudgetLine> listBudgetLines(String username, String role) throws IOException {
         List<BudgetLine> all = loadBudgetLines();
         if ("ADMIN".equals(role)) {
@@ -319,8 +326,11 @@ public class ProjectService {
                             || username.equalsIgnoreCase(lo.dono()))
                     .toList();
         }
+        // Regular user: own LOs (any status) OR ownerless OR published by anyone
         return all.stream()
-                .filter(lo -> lo.dono() == null || username.equalsIgnoreCase(lo.dono()))
+                .filter(lo -> lo.dono() == null
+                        || username.equalsIgnoreCase(lo.dono())
+                        || !"DRAFT".equals(lo.situacao()))
                 .toList();
     }
 
