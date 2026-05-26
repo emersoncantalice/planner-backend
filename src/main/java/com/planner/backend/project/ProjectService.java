@@ -1548,7 +1548,8 @@ public class ProjectService {
                         vagaAlias,
                         null,   // dataNascimento
                         null,   // contato
-                        true)); // ativo
+                        true,   // ativo
+                        null)); // vagasAnteriores
                 criados++;
             } catch (IllegalArgumentException ex) {
                 ignorados++;
