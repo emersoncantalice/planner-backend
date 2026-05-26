@@ -65,9 +65,13 @@ public class ProjectService {
     public List<ProjectRecord> list(String username, String role) throws IOException {
         List<ProjectRecord> all = load();
         if ("ADMIN".equals(role)) {
-            // Admin sees PUBLISHED projects + their own drafts
+            // Admin sees:
+            // - all published projects
+            // - own drafts
+            // - ownerless drafts (legacy/imported/shared records)
             return all.stream()
                     .filter(p -> !"DRAFT".equals(p.situacao())
+                            || p.donoProjeto() == null
                             || username.equalsIgnoreCase(p.donoProjeto()))
                     .toList();
         }
@@ -299,6 +303,7 @@ public class ProjectService {
         if ("ADMIN".equals(role)) {
             return all.stream()
                     .filter(lo -> !"DRAFT".equals(lo.situacao())
+                            || lo.dono() == null
                             || username.equalsIgnoreCase(lo.dono()))
                     .toList();
         }
@@ -1377,6 +1382,7 @@ public class ProjectService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Perfil da pessoa nao encontrado."));
         BigDecimal valorHoraCalculado = resolveValorHora(request, profile);
+        BigDecimal valorMensalAplicado = resolveValorMensal(request, profile, valorHoraCalculado);
         Person created = new Person(
                 UUID.randomUUID().toString(),
                 request.nome().trim(),
@@ -1385,7 +1391,7 @@ public class ProjectService {
                 request.tipoVinculo().trim().toUpperCase(),
                 request.consultoria() == null ? "" : request.consultoria().trim(),
                 valorHoraCalculado,
-                request.valorMensal(),
+                valorMensalAplicado,
                 request.vagaUrl() == null ? null : request.vagaUrl().trim(),
                 request.vagaAlias() == null ? null : request.vagaAlias().trim(),
                 request.dataNascimento() == null ? null : request.dataNascimento().trim(),
@@ -1405,6 +1411,7 @@ public class ProjectService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Perfil da pessoa nao encontrado."));
         BigDecimal valorHoraCalculado = resolveValorHora(request, profile);
+        BigDecimal valorMensalAplicado = resolveValorMensal(request, profile, valorHoraCalculado);
         List<Person> all = new ArrayList<>(loadPeople());
         for (int i = 0; i < all.size(); i++) {
             Person p = all.get(i);
@@ -1417,7 +1424,7 @@ public class ProjectService {
                         request.tipoVinculo().trim().toUpperCase(),
                         request.consultoria() == null ? "" : request.consultoria().trim(),
                         valorHoraCalculado,
-                        request.valorMensal(),
+                        valorMensalAplicado,
                         request.vagaUrl() == null ? p.vagaUrl() : request.vagaUrl().trim(),
                         request.vagaAlias() == null ? p.vagaAlias() : request.vagaAlias().trim(),
                         request.dataNascimento() == null ? p.dataNascimento() : request.dataNascimento().trim(),
@@ -2052,6 +2059,60 @@ public class ProjectService {
         throw new IllegalArgumentException("Indicador nao encontrado.");
     }
 
+    public Indicator updateIndicatorCycle(String indicatorId, String cycleId, UpdateIndicatorCycleRequest request) throws IOException {
+        if (request == null || request.valor() == null)
+            throw new IllegalArgumentException("Valor do ciclo e obrigatorio.");
+        List<Indicator> all = new ArrayList<>(loadIndicators());
+        for (int i = 0; i < all.size(); i++) {
+            Indicator curr = all.get(i);
+            if (curr.id().equals(indicatorId)) {
+                List<IndicatorCycle> ciclos = new ArrayList<>(safeIndList(curr.ciclos()));
+                boolean found = false;
+                for (int j = 0; j < ciclos.size(); j++) {
+                    IndicatorCycle c = ciclos.get(j);
+                    if (c.id().equals(cycleId)) {
+                        ciclos.set(j, new IndicatorCycle(
+                                c.id(), c.numero(), request.valor(),
+                                request.observacao() == null ? c.observacao() : request.observacao().trim(),
+                                request.dataReferencia() == null ? c.dataReferencia() : request.dataReferencia(),
+                                c.criadoEm()));
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) throw new IllegalArgumentException("Ciclo nao encontrado.");
+                Indicator updated = new Indicator(
+                        curr.id(), curr.titulo(), curr.descricao(), curr.tipo(), curr.categoria(),
+                        curr.unidade(), curr.meta(), curr.polaridade(), curr.frequencia(),
+                        curr.responsavel(), curr.status(), ciclos, safeIndList(curr.acoes()), curr.criadoEm());
+                all.set(i, updated);
+                saveIndicators(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Indicador nao encontrado.");
+    }
+
+    public Indicator deleteIndicatorCycle(String indicatorId, String cycleId) throws IOException {
+        List<Indicator> all = new ArrayList<>(loadIndicators());
+        for (int i = 0; i < all.size(); i++) {
+            Indicator curr = all.get(i);
+            if (curr.id().equals(indicatorId)) {
+                List<IndicatorCycle> ciclos = new ArrayList<>(safeIndList(curr.ciclos()));
+                boolean removed = ciclos.removeIf(c -> c.id().equals(cycleId));
+                if (!removed) throw new IllegalArgumentException("Ciclo nao encontrado.");
+                Indicator updated = new Indicator(
+                        curr.id(), curr.titulo(), curr.descricao(), curr.tipo(), curr.categoria(),
+                        curr.unidade(), curr.meta(), curr.polaridade(), curr.frequencia(),
+                        curr.responsavel(), curr.status(), ciclos, safeIndList(curr.acoes()), curr.criadoEm());
+                all.set(i, updated);
+                saveIndicators(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Indicador nao encontrado.");
+    }
+
     public Indicator addIndicatorAction(String indicatorId, CreateIndicatorActionRequest request) throws IOException {
         if (request == null || request.descricao() == null || request.descricao().isBlank())
             throw new IllegalArgumentException("Descricao da acao e obrigatoria.");
@@ -2294,9 +2355,7 @@ public class ProjectService {
                 throw new IllegalArgumentException("Prestador de servico nao encontrado. Cadastre antes de continuar.");
             }
         }
-        if (debitaLo && tipo.equals("BV") && (request.valorMensal() == null || request.valorMensal().compareTo(BigDecimal.ZERO) <= 0)) {
-            throw new IllegalArgumentException("Valor mensal e obrigatorio para BV.");
-        }
+        // Para BV, valor mensal nao e obrigatorio: quando ausente, assume valor do perfil.
     }
 
     private BigDecimal resolveValorHora(CreatePersonRequest request, Profile profile) throws IOException {
@@ -2305,6 +2364,9 @@ public class ProjectService {
         }
         String tipo = request.tipoVinculo().trim().toUpperCase();
         if (tipo.equals("TERCEIRO")) return request.valorHora();
+        if (request.valorMensal() == null || request.valorMensal().compareTo(BigDecimal.ZERO) <= 0) {
+            return profile.valorHora();
+        }
         int mesAtual = LocalDate.now().getMonthValue();
         BigDecimal horasMes = loadMonthlyHours().stream()
                 .filter(h -> h.mes() == mesAtual)
@@ -2313,6 +2375,15 @@ public class ProjectService {
                 .orElse(BigDecimal.valueOf(160));
         if (horasMes.compareTo(BigDecimal.ZERO) <= 0) horasMes = BigDecimal.valueOf(160);
         return request.valorMensal().divide(horasMes, 2, java.math.RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveValorMensal(CreatePersonRequest request, Profile profile, BigDecimal valorHoraCalculado) {
+        if (!profile.debitaLo()) return null;
+        if (request.valorMensal() != null && request.valorMensal().compareTo(BigDecimal.ZERO) > 0) {
+            return request.valorMensal();
+        }
+        BigDecimal valorHoraBase = valorHoraCalculado != null ? valorHoraCalculado : profile.valorHora();
+        return valorHoraBase.multiply(BigDecimal.valueOf(160));
     }
 
     private BigDecimal resolveValorHoraPessoa(String nomePessoa, Profile profile) throws IOException {

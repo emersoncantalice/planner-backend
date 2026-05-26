@@ -484,6 +484,16 @@ public class ProjectController {
         return projectService.addIndicatorCycle(indicatorId, request);
     }
 
+    @PutMapping("/indicators/{indicatorId}/cycles/{cycleId}")
+    public Indicator updateIndicatorCycle(@PathVariable String indicatorId, @PathVariable String cycleId, @RequestBody UpdateIndicatorCycleRequest request) throws IOException {
+        return projectService.updateIndicatorCycle(indicatorId, cycleId, request);
+    }
+
+    @DeleteMapping("/indicators/{indicatorId}/cycles/{cycleId}")
+    public Indicator deleteIndicatorCycle(@PathVariable String indicatorId, @PathVariable String cycleId) throws IOException {
+        return projectService.deleteIndicatorCycle(indicatorId, cycleId);
+    }
+
     @PostMapping("/indicators/{indicatorId}/actions")
     public Indicator addIndicatorAction(@PathVariable String indicatorId, @RequestBody CreateIndicatorActionRequest request) throws IOException {
         return projectService.addIndicatorAction(indicatorId, request);

@@ -512,4 +512,9 @@ public final class ProjectModels {
             String responsavel,
             String status,
             OffsetDateTime prazo) {}
+
+    public record UpdateIndicatorCycleRequest(
+            Double valor,
+            String observacao,
+            OffsetDateTime dataReferencia) {}
 }
