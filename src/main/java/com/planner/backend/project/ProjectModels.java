@@ -55,7 +55,7 @@ public final class ProjectModels {
             String id,
             String scheduleItemId,
             String scheduleItemTitulo,
-            String tipoAlteracao,        // "MOVER" | "REDIMENSIONAR_INICIO" | "REDIMENSIONAR_FIM" | "REDIMENSIONAR"
+            String tipoAlteracao,        
             OffsetDateTime inicioAnterior,
             OffsetDateTime fimAnterior,
             OffsetDateTime inicioNovo,
@@ -73,7 +73,7 @@ public final class ProjectModels {
             List<FinanceEntry> financeiro,
             List<RiskItem> riscos,
             List<ReplanningEvent> historicoReplanejamento,
-            String situacao,      // "DRAFT" | "PUBLISHED" — null treated as "PUBLISHED" (legacy)
+            String situacao,      
             String donoProjeto) {}// username of creator — null means legacy/shared
 
     public record AddReplanningEventRequest(
@@ -106,8 +106,8 @@ public final class ProjectModels {
             String centroCusto,
             BigDecimal valorTotal,
             OffsetDateTime criadoEm,
-            String situacao,  // "DRAFT" | "PUBLISHED"
-            String dono) {}   // username of creator
+            String situacao,  
+            String dono) {}   
 
     public record CreateBudgetLineRequest(
             String codigo,
@@ -208,7 +208,8 @@ public final class ProjectModels {
             String status,
             String responsavel,
             List<GlobalRiskHistoryEvent> historico,
-            OffsetDateTime criadoEm) {}
+            OffsetDateTime criadoEm,
+            String criadoPor) {}  
 
     public record CreateGlobalRiskRequest(
             String titulo,
@@ -264,7 +265,7 @@ public final class ProjectModels {
             String situacao,
             String donoProjeto) {}
 
-    /** Uma entrada no histórico de vagas de uma pessoa. */
+    
     public record VagaHistorico(
             String alias,   // e.g. "VAG0031164"
             String url,     // URL da vaga (pode ser null)
@@ -283,10 +284,10 @@ public final class ProjectModels {
             BigDecimal valorMensal,
             String vagaUrl,
             String vagaAlias,
-            String dataNascimento,   // "yyyy-MM-dd" or null
-            String contato,          // phone / e-mail or null
-            Boolean ativo,           // null in legacy records = treat as true
-            java.util.List<VagaHistorico> vagasAnteriores, // histórico de vagas; null em registros legados
+            String dataNascimento,   
+            String contato,          
+            Boolean ativo,           
+            java.util.List<VagaHistorico> vagasAnteriores, 
             OffsetDateTime criadoEm) {}
 
     public record CreatePersonRequest(
@@ -303,15 +304,15 @@ public final class ProjectModels {
             boolean ativo,
             java.util.List<VagaHistorico> vagasAnteriores) {}
 
-    // ── Ausências / férias ───────────────────────────────────────────────────
+    
     public record Absence(
             String id,
             String pessoaId,
             String pessoaNome,
-            String tipo,           // FERIAS | AUSENCIA | LICENCA | OUTRO
-            String inicio,         // "yyyy-MM-dd"
-            String fim,            // "yyyy-MM-dd"
-            boolean recorrente,    // se true repete todo ano (usa só mm-dd)
+            String tipo,           
+            String inicio,         
+            String fim,            
+            boolean recorrente,    
             String observacao,
             OffsetDateTime criadoEm) {}
 
@@ -419,7 +420,7 @@ public final class ProjectModels {
     // status: ABERTO | EM_INVESTIGACAO | RESOLVIDO | POS_MORTEM
     public record IncidentHistoryEvent(
             String id,
-            String tipo,          // CRIACAO | STATUS | EDICAO
+            String tipo,          
             String descricao,
             String statusAnterior,
             String statusNovo,
@@ -439,7 +440,8 @@ public final class ProjectModels {
             String causaRaiz,
             String acoesCorrativas,
             List<IncidentHistoryEvent> historico,
-            OffsetDateTime criadoEm) {}
+            OffsetDateTime criadoEm,
+            String criadoPor) {}  
 
     public record CreateIncidentRequest(
             String titulo,
@@ -454,14 +456,14 @@ public final class ProjectModels {
             String causaRaiz,
             String acoesCorrativas) {}
 
-    // ── Technical Debt ────────────────────────────────────────────────────────
-    // categoria: ARQUITETURA | CODIGO | TESTES | DOCUMENTACAO | INFRAESTRUTURA | SEGURANCA | OUTROS
-    // impacto: BAIXO | MEDIO | ALTO | CRITICO
-    // prioridade: BAIXA | MEDIA | ALTA | URGENTE
-    // status: IDENTIFICADO | EM_TRATAMENTO | RESOLVIDO | ACEITO
+    
+    
+    
+    
+    
     public record TechnicalDebtHistoryEvent(
             String id,
-            String tipo,          // CRIACAO | STATUS | EDICAO
+            String tipo,          
             String descricao,
             String statusAnterior,
             String statusNovo,
@@ -481,7 +483,8 @@ public final class ProjectModels {
             OffsetDateTime dataAlvo,
             OffsetDateTime resolvidoEm,
             List<TechnicalDebtHistoryEvent> historico,
-            OffsetDateTime criadoEm) {}
+            OffsetDateTime criadoEm,
+            String criadoPor) {}  // username do criador — null em registros legados
 
     public record CreateTechnicalDebtRequest(
             String titulo,
@@ -495,17 +498,17 @@ public final class ProjectModels {
             String projetoRef,
             OffsetDateTime dataAlvo) {}
 
-    // ── Indicators ────────────────────────────────────────────────────────────
-    // tipo: TECNICO | NEGOCIO
-    // categoria: QUALIDADE | PRODUTIVIDADE | FINANCEIRO | ATENDIMENTO | SEGURANCA | OUTROS
-    // polaridade: MAIOR_MELHOR | MENOR_MELHOR
-    // frequencia: SEMANAL | QUINZENAL | MENSAL | TRIMESTRAL
-    // status: ATIVO | INATIVO
+    
+    
+    
+    
+    
+    
     public record IndicatorAction(
             String id,
             String descricao,
             String responsavel,
-            String status,          // ABERTA | CONCLUIDA
+            String status,          
             int cicloAberto,
             Integer cicloConcluido,
             OffsetDateTime prazo,
@@ -534,7 +537,8 @@ public final class ProjectModels {
             String status,
             List<IndicatorCycle> ciclos,
             List<IndicatorAction> acoes,
-            OffsetDateTime criadoEm) {}
+            OffsetDateTime criadoEm,
+            String criadoPor) {}  // username do criador — null em registros legados
 
     public record CreateIndicatorRequest(
             String titulo,
@@ -570,7 +574,26 @@ public final class ProjectModels {
             String observacao,
             OffsetDateTime dataReferencia) {}
 
-    // ── Gantt Configuration ───────────────────────────────────────────────────
+    
+    // ── Allocation Percent (general allocation % per allocation, saved to backend) ─────────
+    public record AllocationPercentConfig(
+            String allocationId,
+            java.math.BigDecimal percentual,
+            OffsetDateTime updatedAt,
+            String updatedBy) {}
+
+    public record UpsertAllocationPercentRequest(java.math.BigDecimal percentual) {}
+
+    // ── LO Realizado (realized monthly value per LO, saved to backend) ───────────────────
+    public record LoRealizadoConfig(
+            String loId,
+            int month,
+            java.math.BigDecimal valor,
+            OffsetDateTime updatedAt,
+            String updatedBy) {}
+
+    public record UpsertLoRealizadoRequest(java.math.BigDecimal valor) {}
+
     public record GanttMarker(String id, String label, String date, String description) {}
     public record GanttItemMeta(String responsavel, int pct) {}
     public record GanttProjectConfig(
@@ -580,6 +603,8 @@ public final class ProjectModels {
     public record SaveGanttConfigRequest(
             List<GanttMarker> markers,
             java.util.Map<String, GanttItemMeta> meta) {}
+
+    public record TransferOwnershipRequest(String novoDono) {}
 
     public record ReplaceOwnershipRequest(
             String oldValue,
@@ -596,7 +621,7 @@ public final class ProjectModels {
             int acoesIndicadorResponsavelAtualizadas,
             int totalAtualizacoes) {}
 
-    // ── Feriados Configuration ────────────────────────────────────────────────
+    
     public record FeriadoEntry(String id, String data, String nome, String tipo) {}
     public record FederalOverrideEntry(String nomeCustom, boolean disabled) {}
     public record FeriadosConfig(

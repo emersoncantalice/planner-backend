@@ -42,13 +42,15 @@ public class DataFilesInitializer implements ApplicationRunner {
                 "incidents.json",
                 "technical-debts.json",
                 "indicators.json",
-                "gantt-configs.json");
+                "gantt-configs.json",
+                "allocation-percent.json",
+                "lo-realizado.json");
 
         for (String fileName : requiredFiles) {
             ensureFile(Path.of(dataDir, fileName), "[]");
         }
 
-        // Feriados config is a single JSON object, not a list
+        
         ensureFile(Path.of(dataDir, "feriados.json"), "{}");
     }
 

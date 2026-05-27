@@ -8,8 +8,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,7 +28,7 @@ public class FileJsonStore {
         this.objectMapper = objectMapper;
     }
 
-    /** Expose the shared mapper for ad-hoc parsing (e.g. embedded JSON in strings). */
+    
     public ObjectMapper getObjectMapper() { return objectMapper; }
 
     public <T> List<T> readList(Path path, TypeReference<List<T>> typeReference) throws IOException {
@@ -38,46 +36,29 @@ public class FileJsonStore {
             return List.of();
         }
         if (Files.size(path) == 0L) {
-            log.warn("Arquivo de dados vazio detectado: {}. Retornando lista vazia.", path);
             return List.of();
         }
         try {
             return objectMapper.readValue(path.toFile(), typeReference);
         } catch (IOException ex) {
-            Path backup = path.resolveSibling(path.getFileName() + ".corrupted-" +
-                    OffsetDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + ".json");
-            try {
-                Files.move(path, backup, StandardCopyOption.REPLACE_EXISTING);
-                log.error("Arquivo de dados corrompido movido para backup: {} -> {}. Retornando lista vazia.", path, backup, ex);
-            } catch (IOException moveEx) {
-                log.error("Arquivo de dados corrompido detectado em {}, mas nao foi possivel mover para backup ({}). Retornando lista vazia.",
-                        path, moveEx.getMessage(), ex);
-            }
+            log.error("Falha ao ler arquivo de dados '{}'. Retornando lista vazia. Causa: {}", path.getFileName(), ex.getMessage());
             return List.of();
         }
     }
 
-    /** Read a single JSON object from a file. Returns {@code null} if the file is absent or empty. */
+
     public <T> T readObject(Path path, TypeReference<T> typeReference) throws IOException {
         if (!Files.exists(path)) return null;
         if (Files.size(path) == 0L) return null;
         try {
             return objectMapper.readValue(path.toFile(), typeReference);
         } catch (IOException ex) {
-            Path backup = path.resolveSibling(path.getFileName() + ".corrupted-" +
-                    OffsetDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + ".json");
-            try {
-                Files.move(path, backup, StandardCopyOption.REPLACE_EXISTING);
-                log.error("Arquivo de dados (objeto) corrompido movido para backup: {} -> {}. Retornando null.", path, backup, ex);
-            } catch (IOException moveEx) {
-                log.error("Arquivo de dados (objeto) corrompido em {}, nao foi possivel mover para backup ({}). Retornando null.",
-                        path, moveEx.getMessage(), ex);
-            }
+            log.error("Falha ao ler arquivo de dados '{}'. Retornando null. Causa: {}", path.getFileName(), ex.getMessage());
             return null;
         }
     }
 
-    /** Write a single JSON object atomically, replacing the file. */
+    
     public <T> void writeObject(Path path, T value) throws IOException {
         Path parent = path.getParent();
         if (parent != null) Files.createDirectories(parent);

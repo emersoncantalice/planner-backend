@@ -23,7 +23,7 @@ public class ProjectController {
         this.projectService = projectService;
     }
 
-    // ── Auth helpers ───────────────────────────────────────────────────────
+    
     private static String username(HttpServletRequest req) {
         Object v = req.getAttribute(AuthTokenInterceptor.ATTR_USERNAME);
         return v != null ? v.toString() : "";
@@ -33,9 +33,10 @@ public class ProjectController {
         return v != null ? v.toString() : "USER";
     }
 
-    // ── Projects ───────────────────────────────────────────────────────────
+    
     @GetMapping("/projects")
     public List<ProjectRecord> listProjects(HttpServletRequest req) throws IOException {
+        log.info("GET /api/projects user={} role={}", username(req), role(req));
         return projectService.list(username(req), role(req));
     }
 
@@ -55,6 +56,7 @@ public class ProjectController {
     @PostMapping("/projects")
     public ProjectRecord createProject(@RequestBody CreateProjectRequest request,
                                        HttpServletRequest req) throws IOException {
+        log.info("POST /api/projects user={} nome={}", username(req), request != null ? request.nome() : null);
         return projectService.create(request, username(req));
     }
 
@@ -73,8 +75,16 @@ public class ProjectController {
 
     @DeleteMapping("/projects/{projectId}")
     public ResponseEntity<Void> deleteProject(@PathVariable String projectId) throws IOException {
+        log.info("DELETE /api/projects/{}", projectId);
         projectService.deleteProject(projectId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/projects/{projectId}/dono")
+    public ProjectRecord transferProjectDono(@PathVariable String projectId,
+                                              @RequestBody TransferOwnershipRequest request,
+                                              HttpServletRequest req) throws IOException {
+        return projectService.transferProjectDono(projectId, request.novoDono(), username(req), role(req));
     }
 
     @GetMapping("/projects/{projectId}")
@@ -157,6 +167,13 @@ public class ProjectController {
     public ResponseEntity<Void> deleteBudgetLine(@PathVariable String budgetLineId) throws IOException {
         projectService.deleteBudgetLine(budgetLineId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/budget-lines/{budgetLineId}/dono")
+    public BudgetLine transferBudgetLineDono(@PathVariable String budgetLineId,
+                                              @RequestBody TransferOwnershipRequest request,
+                                              HttpServletRequest req) throws IOException {
+        return projectService.transferBudgetLineDono(budgetLineId, request.novoDono(), username(req), role(req));
     }
 
     @GetMapping("/budget-line-adjustments")
@@ -304,6 +321,35 @@ public class ProjectController {
         return projectService.upsertAllocationMonthlyState(allocationId, month, request, username(req));
     }
 
+    @GetMapping("/allocation-percent")
+    public List<AllocationPercentConfig> listAllocationPercents() throws IOException {
+        return projectService.listAllocationPercents();
+    }
+
+    @PutMapping("/allocation-percent/{allocationId}")
+    public AllocationPercentConfig upsertAllocationPercent(
+            @PathVariable String allocationId,
+            @RequestBody UpsertAllocationPercentRequest request,
+            HttpServletRequest req) throws IOException {
+        java.math.BigDecimal pct = request != null ? request.percentual() : null;
+        return projectService.upsertAllocationPercent(allocationId, pct, username(req));
+    }
+
+    @GetMapping("/lo-realizado")
+    public List<LoRealizadoConfig> listLoRealizado() throws IOException {
+        return projectService.listLoRealizado();
+    }
+
+    @PutMapping("/lo-realizado/{loId}/{month}")
+    public LoRealizadoConfig upsertLoRealizado(
+            @PathVariable String loId,
+            @PathVariable int month,
+            @RequestBody UpsertLoRealizadoRequest request,
+            HttpServletRequest req) throws IOException {
+        java.math.BigDecimal valor = request != null ? request.valor() : null;
+        return projectService.upsertLoRealizado(loId, month, valor, username(req));
+    }
+
     @GetMapping("/allocation-cursors")
     public List<AllocationCursorState> listAllocationCursors(@RequestParam(required = false) String loId) throws IOException {
         return projectService.listAllocationCursors(loId);
@@ -416,8 +462,9 @@ public class ProjectController {
     }
 
     @PostMapping("/risks")
-    public GlobalRisk createRisk(@RequestBody CreateGlobalRiskRequest request) throws IOException {
-        return projectService.createGlobalRisk(request);
+    public GlobalRisk createRisk(@RequestBody CreateGlobalRiskRequest request,
+                                  HttpServletRequest req) throws IOException {
+        return projectService.createGlobalRisk(request, username(req));
     }
 
     @PostMapping("/risks/import-csv")
@@ -446,13 +493,20 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── Activities (cross-project) ─────────────────────────────────────────
+    @PatchMapping("/risks/{riskId}/dono")
+    public GlobalRisk transferRiskDono(@PathVariable String riskId,
+                                        @RequestBody TransferOwnershipRequest request,
+                                        HttpServletRequest req) throws IOException {
+        return projectService.transferGlobalRiskDono(riskId, request.novoDono(), username(req), role(req));
+    }
+
+
     @GetMapping("/activities")
     public List<ProjectActivity> listAllActivities(HttpServletRequest req) throws IOException {
         return projectService.listAllActivities();
     }
 
-    // ── Absences / férias ────────────────────────────────────────────────────
+    
     @GetMapping("/absences")
     public List<Absence> listAbsences() throws IOException {
         return projectService.listAbsences();
@@ -474,15 +528,16 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── Incidents ─────────────────────────────────────────────────────────────
+    
     @GetMapping("/incidents")
     public List<Incident> listIncidents() throws IOException {
         return projectService.listIncidents();
     }
 
     @PostMapping("/incidents")
-    public Incident createIncident(@RequestBody CreateIncidentRequest request) throws IOException {
-        return projectService.createIncident(request);
+    public Incident createIncident(@RequestBody CreateIncidentRequest request,
+                                    HttpServletRequest req) throws IOException {
+        return projectService.createIncident(request, username(req));
     }
 
     @PostMapping("/incidents/import-csv")
@@ -501,15 +556,23 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── Technical Debt ────────────────────────────────────────────────────────
+    @PatchMapping("/incidents/{incidentId}/dono")
+    public Incident transferIncidentDono(@PathVariable String incidentId,
+                                          @RequestBody TransferOwnershipRequest request,
+                                          HttpServletRequest req) throws IOException {
+        return projectService.transferIncidentDono(incidentId, request.novoDono(), username(req), role(req));
+    }
+
+
     @GetMapping("/technical-debts")
     public List<TechnicalDebt> listTechnicalDebts() throws IOException {
         return projectService.listTechnicalDebts();
     }
 
     @PostMapping("/technical-debts")
-    public TechnicalDebt createTechnicalDebt(@RequestBody CreateTechnicalDebtRequest request) throws IOException {
-        return projectService.createTechnicalDebt(request);
+    public TechnicalDebt createTechnicalDebt(@RequestBody CreateTechnicalDebtRequest request,
+                                              HttpServletRequest req) throws IOException {
+        return projectService.createTechnicalDebt(request, username(req));
     }
 
     @PutMapping("/technical-debts/{debtId}")
@@ -523,15 +586,23 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── Indicators ────────────────────────────────────────────────────────────
+    @PatchMapping("/technical-debts/{debtId}/dono")
+    public TechnicalDebt transferTechnicalDebtDono(@PathVariable String debtId,
+                                                    @RequestBody TransferOwnershipRequest request,
+                                                    HttpServletRequest req) throws IOException {
+        return projectService.transferTechnicalDebtDono(debtId, request.novoDono(), username(req), role(req));
+    }
+
+
     @GetMapping("/indicators")
     public List<Indicator> listIndicators() throws IOException {
         return projectService.listIndicators();
     }
 
     @PostMapping("/indicators")
-    public Indicator createIndicator(@RequestBody CreateIndicatorRequest request) throws IOException {
-        return projectService.createIndicator(request);
+    public Indicator createIndicator(@RequestBody CreateIndicatorRequest request,
+                                      HttpServletRequest req) throws IOException {
+        return projectService.createIndicator(request, username(req));
     }
 
     @PutMapping("/indicators/{indicatorId}")
@@ -543,6 +614,13 @@ public class ProjectController {
     public ResponseEntity<Void> deleteIndicator(@PathVariable String indicatorId) throws IOException {
         projectService.deleteIndicator(indicatorId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/indicators/{indicatorId}/dono")
+    public Indicator transferIndicatorDono(@PathVariable String indicatorId,
+                                            @RequestBody TransferOwnershipRequest request,
+                                            HttpServletRequest req) throws IOException {
+        return projectService.transferIndicatorDono(indicatorId, request.novoDono(), username(req), role(req));
     }
 
     @PostMapping("/indicators/{indicatorId}/cycles")
@@ -577,6 +655,7 @@ public class ProjectController {
 
     @GetMapping("/reports/overview")
     public List<ProjectOverviewResponse> overview(HttpServletRequest req) throws IOException {
+        log.info("GET /api/reports/overview user={} role={}", username(req), role(req));
         return projectService.overview(username(req), role(req));
     }
 
@@ -585,7 +664,7 @@ public class ProjectController {
         return projectService.getById(projectId);
     }
 
-    // ── Feriados config ───────────────────────────────────────────────────────
+    
     @GetMapping("/feriados")
     public FeriadosConfig getFeriados() throws IOException {
         return projectService.getFeriadosConfig();
@@ -596,7 +675,7 @@ public class ProjectController {
         return projectService.saveFeriadosConfig(config);
     }
 
-    // ── Gantt config ──────────────────────────────────────────────────────────
+    
     @GetMapping("/gantt-configs/{projectId}")
     public GanttProjectConfig getGanttConfig(@PathVariable String projectId) throws IOException {
         return projectService.getGanttConfig(projectId);

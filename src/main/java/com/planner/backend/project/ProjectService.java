@@ -13,7 +13,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +44,8 @@ public class ProjectService {
     private final java.nio.file.Path allocationCursorsPath;
     private final java.nio.file.Path feriadosPath;
     private final java.nio.file.Path ganttConfigsPath;
+    private final java.nio.file.Path allocationPercentPath;
+    private final java.nio.file.Path loRealizadoPath;
     private final com.planner.backend.auth.FileJsonStore jsonStore;
 
     public ProjectService(
@@ -70,14 +74,12 @@ public class ProjectService {
         this.allocationCursorsPath = java.nio.file.Path.of(dataDir, "allocation-cursors.json");
         this.feriadosPath = java.nio.file.Path.of(dataDir, "feriados.json");
         this.ganttConfigsPath = java.nio.file.Path.of(dataDir, "gantt-configs.json");
+        this.allocationPercentPath = java.nio.file.Path.of(dataDir, "allocation-percent.json");
+        this.loRealizadoPath = java.nio.file.Path.of(dataDir, "lo-realizado.json");
         ensureDataFiles();
     }
 
-    /**
-     * Returns projects visible to the given user.
-     *  - ADMIN: all published + own drafts + ownerless drafts (legacy)
-     *  - Regular user: own projects (any status) + other users' published projects + ownerless
-     */
+    
     public List<ProjectRecord> list(String username, String role) throws IOException {
         List<ProjectRecord> all = load();
         if ("ADMIN".equals(role)) {
@@ -87,7 +89,7 @@ public class ProjectService {
                             || username.equalsIgnoreCase(p.donoProjeto()))
                     .toList();
         }
-        // Regular user: own projects (any status) OR ownerless OR published by anyone
+        
         return all.stream()
                 .filter(p -> p.donoProjeto() == null
                         || username.equalsIgnoreCase(p.donoProjeto())
@@ -194,7 +196,7 @@ public class ProjectService {
             if (matchesValue(r.responsavel(), oldNorm)) {
                 riscos.set(i, new GlobalRisk(
                         r.id(), r.titulo(), r.descricao(), r.planoAcao(), r.dataFim(), r.status(),
-                        newNorm, r.historico(), r.criadoEm()));
+                        newNorm, r.historico(), r.criadoEm(), r.criadoPor()));
                 riscosResponsavelAtualizados++;
             }
         }
@@ -207,7 +209,7 @@ public class ProjectService {
                 incidents.set(i, new Incident(
                         it.id(), it.titulo(), it.descricao(), it.tipo(), it.severidade(), it.status(),
                         newNorm, it.dataOcorrencia(), it.dataResolucao(), it.impacto(), it.causaRaiz(),
-                        it.acoesCorrativas(), safeIncidentHistory(it.historico()), it.criadoEm()));
+                        it.acoesCorrativas(), safeIncidentHistory(it.historico()), it.criadoEm(), it.criadoPor()));
                 incidentesResponsavelAtualizados++;
             }
         }
@@ -220,7 +222,7 @@ public class ProjectService {
                 debts.set(i, new TechnicalDebt(
                         d.id(), d.titulo(), d.descricao(), d.categoria(), d.impacto(), d.esforcoEstimado(),
                         d.prioridade(), d.status(), newNorm, d.projetoRef(), d.dataAlvo(), d.resolvidoEm(),
-                        safeDebtHistory(d.historico()), d.criadoEm()));
+                        safeDebtHistory(d.historico()), d.criadoEm(), d.criadoPor()));
                 debitosResponsavelAtualizados++;
             }
         }
@@ -252,7 +254,7 @@ public class ProjectService {
                 indicators.set(i, new Indicator(
                         ind.id(), ind.titulo(), ind.descricao(), ind.tipo(), ind.categoria(), ind.unidade(),
                         ind.meta(), ind.polaridade(), ind.frequencia(), responsavel, ind.status(),
-                        safeIndList(ind.ciclos()), acoes, ind.criadoEm()));
+                        safeIndList(ind.ciclos()), acoes, ind.criadoEm(), ind.criadoPor()));
             }
         }
         saveIndicators(indicators);
@@ -277,7 +279,7 @@ public class ProjectService {
                 && current.trim().equalsIgnoreCase(expected.trim());
     }
 
-    // Legacy overload (for internal/template use)
+    
     public ProjectRecord create(CreateProjectRequest request) throws IOException {
         return create(request, null);
     }
@@ -318,6 +320,27 @@ public class ProjectService {
         boolean removed = all.removeIf(p -> p.id().equals(projectId));
         if (!removed) throw new IllegalArgumentException("Projeto nao encontrado.");
         save(all);
+    }
+
+    public ProjectRecord transferProjectDono(String projectId, String novoDono, String username, String role) throws IOException {
+        if (novoDono == null || novoDono.isBlank()) throw new IllegalArgumentException("Novo dono e obrigatorio.");
+        List<ProjectRecord> all = new ArrayList<>(load());
+        for (int i = 0; i < all.size(); i++) {
+            ProjectRecord p = all.get(i);
+            if (p.id().equals(projectId)) {
+                boolean isOwner = p.donoProjeto() == null || username.equalsIgnoreCase(p.donoProjeto());
+                if (!isOwner && !"ADMIN".equals(role))
+                    throw new IllegalArgumentException("Sem permissao para transferir este projeto.");
+                ProjectRecord updated = new ProjectRecord(
+                        p.id(), p.nome(), p.descricao(), p.criadoEm(), p.etapas(), p.cronograma(),
+                        p.alocacoes(), p.financeiro(), p.riscos(), safeReplanList(p.historicoReplanejamento()),
+                        p.situacao(), novoDono.trim());
+                all.set(i, updated);
+                save(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Projeto nao encontrado.");
     }
 
     public ProjectRecord addStep(String projectId, CreateStepRequest request) throws IOException {
@@ -458,16 +481,22 @@ public class ProjectService {
 
     public void deleteProfile(String profileId) throws IOException {
         List<Profile> all = new ArrayList<>(loadProfiles());
-        boolean removed = all.removeIf(p -> p.id().equals(profileId));
-        if (!removed) throw new IllegalArgumentException("Perfil nao encontrado.");
+        boolean found = all.stream().anyMatch(p -> p.id().equals(profileId));
+        if (!found) throw new IllegalArgumentException("Perfil nao encontrado.");
+
+        long pessoasVinculadas = loadPeople().stream()
+                .filter(p -> profileId.equals(p.perfilId()))
+                .count();
+        if (pessoasVinculadas > 0) {
+            throw new IllegalArgumentException(
+                    "Perfil em uso por " + pessoasVinculadas + " pessoa(s). Desvincule-as antes de excluir o perfil.");
+        }
+
+        all.removeIf(p -> p.id().equals(profileId));
         saveProfiles(all);
     }
 
-    /**
-     * Returns budget lines visible to the given user.
-     *  - ADMIN: all published + own drafts + ownerless
-     *  - Regular user: own LOs (any status) + other users' published LOs + ownerless
-     */
+    
     public List<BudgetLine> listBudgetLines(String username, String role) throws IOException {
         List<BudgetLine> all = loadBudgetLines();
         if ("ADMIN".equals(role)) {
@@ -477,7 +506,7 @@ public class ProjectService {
                             || username.equalsIgnoreCase(lo.dono()))
                     .toList();
         }
-        // Regular user: own LOs (any status) OR ownerless OR published by anyone
+        
         return all.stream()
                 .filter(lo -> lo.dono() == null
                         || username.equalsIgnoreCase(lo.dono())
@@ -611,15 +640,50 @@ public class ProjectService {
         if (!removed) throw new IllegalArgumentException("LO nao encontrada.");
         saveBudgetLines(all);
 
-        // Cascade: remove todas as alocações vinculadas a esta LO
+        // Collect allocation IDs before removing (needed for cascade)
         List<BudgetAllocation> allocations = new ArrayList<>(loadBudgetAllocations());
+        Set<String> removedAllocIds = allocations.stream()
+                .filter(a -> budgetLineId.equals(a.linhaOrcamentariaId()))
+                .map(BudgetAllocation::id)
+                .collect(Collectors.toSet());
         allocations.removeIf(a -> budgetLineId.equals(a.linhaOrcamentariaId()));
         saveBudgetAllocations(allocations);
 
-        // Cascade: remove todos os ajustes vinculados a esta LO
         List<BudgetLineAdjustment> adjustments = new ArrayList<>(loadBudgetLineAdjustments());
         adjustments.removeIf(a -> budgetLineId.equals(a.budgetLineId()));
         saveBudgetLineAdjustments(adjustments);
+
+        // Cascade: payment states and monthly states for deleted allocations
+        if (!removedAllocIds.isEmpty()) {
+            List<AllocationPaymentState> payments = new ArrayList<>(loadAllocationPayments());
+            if (payments.removeIf(p -> removedAllocIds.contains(p.allocationId()))) saveAllocationPayments(payments);
+            List<AllocationMonthlyState> monthly = new ArrayList<>(loadAllocationMonthlyStates());
+            if (monthly.removeIf(m -> removedAllocIds.contains(m.allocationId()))) saveAllocationMonthlyStates(monthly);
+            List<AllocationPercentConfig> pcts = new ArrayList<>(loadAllocationPercents());
+            if (pcts.removeIf(p -> removedAllocIds.contains(p.allocationId()))) saveAllocationPercents(pcts);
+        }
+        // Cascade: lo-realizado for this budget line
+        List<LoRealizadoConfig> realizados = new ArrayList<>(loadLoRealizado());
+        if (realizados.removeIf(r -> budgetLineId.equals(r.loId()))) saveLoRealizado(realizados);
+    }
+
+    public BudgetLine transferBudgetLineDono(String id, String novoDono, String username, String role) throws IOException {
+        if (novoDono == null || novoDono.isBlank()) throw new IllegalArgumentException("Novo dono e obrigatorio.");
+        List<BudgetLine> all = new ArrayList<>(loadBudgetLines());
+        for (int i = 0; i < all.size(); i++) {
+            BudgetLine lo = all.get(i);
+            if (lo.id().equals(id)) {
+                boolean isOwner = lo.dono() == null || username.equalsIgnoreCase(lo.dono());
+                if (!isOwner && !"ADMIN".equals(role))
+                    throw new IllegalArgumentException("Sem permissao para transferir esta LO.");
+                BudgetLine updated = new BudgetLine(lo.id(), lo.codigo(), lo.nome(), lo.ano(),
+                        lo.tipo(), lo.centroCusto(), lo.valorTotal(), lo.criadoEm(), lo.situacao(), novoDono.trim());
+                all.set(i, updated);
+                saveBudgetLines(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("LO nao encontrada.");
     }
 
     public List<BudgetLineAdjustment> listBudgetLineAdjustments() throws IOException {
@@ -877,6 +941,14 @@ public class ProjectService {
         boolean removed = all.removeIf(a -> a.id().equals(allocationId));
         if (!removed) throw new IllegalArgumentException("Alocacao LO nao encontrada.");
         saveBudgetAllocations(all);
+
+        // Cascade: payment states, monthly states and percent config for this allocation
+        List<AllocationPaymentState> payments = new ArrayList<>(loadAllocationPayments());
+        if (payments.removeIf(p -> allocationId.equals(p.allocationId()))) saveAllocationPayments(payments);
+        List<AllocationMonthlyState> monthly = new ArrayList<>(loadAllocationMonthlyStates());
+        if (monthly.removeIf(m -> allocationId.equals(m.allocationId()))) saveAllocationMonthlyStates(monthly);
+        List<AllocationPercentConfig> pcts = new ArrayList<>(loadAllocationPercents());
+        if (pcts.removeIf(p -> allocationId.equals(p.allocationId()))) saveAllocationPercents(pcts);
     }
 
     public List<GlobalRisk> listGlobalRisks() throws IOException {
@@ -888,7 +960,7 @@ public class ProjectService {
         return normalized;
     }
 
-    public GlobalRisk createGlobalRisk(CreateGlobalRiskRequest request) throws IOException {
+    public GlobalRisk createGlobalRisk(CreateGlobalRiskRequest request, String criadoPor) throws IOException {
         if (request == null || request.titulo() == null || request.titulo().isBlank()) {
             throw new IllegalArgumentException("Titulo do apontamento de risco e obrigatorio.");
         }
@@ -899,6 +971,7 @@ public class ProjectService {
                 ? "PLANO_ACAO"
                 : request.status().trim().toUpperCase();
         validateRiskStatus(status);
+        String dono = (criadoPor == null || criadoPor.isBlank()) ? null : criadoPor.trim();
         GlobalRisk created = new GlobalRisk(
                 UUID.randomUUID().toString(),
                 request.titulo().trim(),
@@ -908,7 +981,8 @@ public class ProjectService {
                 status,
                 request.responsavel() == null ? null : request.responsavel().trim(),
                 new ArrayList<>(),
-                OffsetDateTime.now());
+                OffsetDateTime.now(),
+                dono);
         List<GlobalRiskHistoryEvent> historico = new ArrayList<>(safeHistory(created.historico()));
         historico.add(historyEvent(
                 "CRIACAO",
@@ -920,11 +994,17 @@ public class ProjectService {
                 null));
         created = new GlobalRisk(
                 created.id(), created.titulo(), created.descricao(), created.planoAcao(),
-                created.dataFim(), created.status(), created.responsavel(), historico, created.criadoEm());
+                created.dataFim(), created.status(), created.responsavel(), historico, created.criadoEm(),
+                created.criadoPor());
         List<GlobalRisk> all = new ArrayList<>(loadGlobalRisks());
         all.add(created);
         saveGlobalRisks(all);
         return created;
+    }
+
+    /** Sobrecarga usada por importacao CSV (sem usuario logado). */
+    public GlobalRisk createGlobalRisk(CreateGlobalRiskRequest request) throws IOException {
+        return createGlobalRisk(request, null);
     }
 
     public GlobalRisk updateGlobalRiskStatus(String riskId, UpdateGlobalRiskStatusRequest request) throws IOException {
@@ -947,7 +1027,7 @@ public class ProjectService {
                         r.dataFim(),
                         null));
                 GlobalRisk updated = new GlobalRisk(
-                        r.id(), r.titulo(), r.descricao(), r.planoAcao(), r.dataFim(), nextStatus, r.responsavel(), historico, r.criadoEm());
+                        r.id(), r.titulo(), r.descricao(), r.planoAcao(), r.dataFim(), nextStatus, r.responsavel(), historico, r.criadoEm(), r.criadoPor());
                 all.set(i, updated);
                 saveGlobalRisks(all);
                 return updated;
@@ -992,7 +1072,8 @@ public class ProjectService {
                         status,
                         request.responsavel() == null ? r.responsavel() : request.responsavel().trim(),
                         historico,
-                        r.criadoEm());
+                        r.criadoEm(),
+                        r.criadoPor());
                 all.set(i, updated);
                 saveGlobalRisks(all);
                 return updated;
@@ -1006,6 +1087,25 @@ public class ProjectService {
         boolean removed = all.removeIf(r -> r.id().equals(riskId));
         if (!removed) throw new IllegalArgumentException("Apontamento de risco nao encontrado.");
         saveGlobalRisks(all);
+    }
+
+    public GlobalRisk transferGlobalRiskDono(String id, String novoDono, String username, String role) throws IOException {
+        if (novoDono == null || novoDono.isBlank()) throw new IllegalArgumentException("Novo dono e obrigatorio.");
+        List<GlobalRisk> all = new ArrayList<>(loadGlobalRisks());
+        for (int i = 0; i < all.size(); i++) {
+            GlobalRisk r = all.get(i);
+            if (r.id().equals(id)) {
+                boolean isOwner = r.criadoPor() == null || username.equalsIgnoreCase(r.criadoPor());
+                if (!isOwner && !"ADMIN".equals(role))
+                    throw new IllegalArgumentException("Sem permissao para transferir este risco.");
+                GlobalRisk updated = new GlobalRisk(r.id(), r.titulo(), r.descricao(), r.planoAcao(),
+                        r.dataFim(), r.status(), r.responsavel(), r.historico(), r.criadoEm(), novoDono.trim());
+                all.set(i, updated);
+                saveGlobalRisks(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Apontamento de risco nao encontrado.");
     }
 
     public List<ProjectActivity> listAllActivities() throws IOException {
@@ -1041,7 +1141,7 @@ public class ProjectService {
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i] == null ? "" : lines[i].trim();
             if (line.isBlank()) continue;
-            // pula cabecalho
+            
             if (i == 0 && line.toLowerCase(Locale.ROOT).contains("titulo")) continue;
             String[] cols = splitCsvLine(line);
             if (cols.length < 2) { ignorados++; continue; }
@@ -1099,7 +1199,7 @@ public class ProjectService {
                         request.novaDataFim(),
                         request.motivo().trim()));
                 GlobalRisk updated = new GlobalRisk(
-                        r.id(), r.titulo(), r.descricao(), r.planoAcao(), request.novaDataFim(), r.status(), r.responsavel(), historico, r.criadoEm());
+                        r.id(), r.titulo(), r.descricao(), r.planoAcao(), request.novaDataFim(), r.status(), r.responsavel(), historico, r.criadoEm(), r.criadoPor());
                 all.set(i, updated);
                 saveGlobalRisks(all);
                 return updated;
@@ -1129,7 +1229,8 @@ public class ProjectService {
                 risk.status(),
                 risk.responsavel(),
                 historico,
-                risk.criadoEm());
+                risk.criadoEm(),
+                risk.criadoPor());
     }
 
     private List<GlobalRiskHistoryEvent> safeHistory(List<GlobalRiskHistoryEvent> history) {
@@ -1344,7 +1445,7 @@ public class ProjectService {
         });
     }
 
-    // ── Gantt etapas parser (mirrors frontend ET_TAG logic) ──────────────────
+    
     private static final String ET_TAG     = "##ETAPAS:";
     private static final String ET_TAG_END = "##";
 
@@ -1365,7 +1466,7 @@ public class ProjectService {
         }
     }
 
-    /** Effective completion % for a single ScheduleItem, mirroring the Gantt panel logic. */
+    
     private double effectivePctItem(ScheduleItem item,
                                     java.util.Map<String, GanttItemMeta> metaMap) {
         String st = String.valueOf(item.status() != null ? item.status() : "").toUpperCase();
@@ -1380,7 +1481,7 @@ public class ProjectService {
     }
 
     public List<ProjectOverviewResponse> overview(String username, String role) throws IOException {
-        // Load gantt configs once for all projects (avoid per-project I/O in the loop)
+        
         java.util.Map<String, java.util.Map<String, GanttItemMeta>> ganttMetaByProject =
                 loadGanttConfigs().stream().collect(java.util.stream.Collectors.toMap(
                         GanttProjectConfig::projectId,
@@ -1395,7 +1496,7 @@ public class ProjectService {
             int percentualConclusao;
             List<ScheduleItem> cronograma = p.cronograma() != null ? p.cronograma() : List.of();
             if (cronograma.isEmpty()) {
-                // No activities yet: fall back to checklist steps
+                
                 percentualConclusao = totalEtapas == 0 ? 0
                         : (int) Math.round((etapasConcluidas * 100.0) / totalEtapas);
             } else {
@@ -1441,7 +1542,7 @@ public class ProjectService {
         return new Person(p.id(), p.nome(), p.perfilId(), p.perfilNome(),
                 p.tipoVinculo(), p.consultoria(), p.valorHora(), p.valorMensal(),
                 p.vagaUrl(), p.vagaAlias(), p.dataNascimento(), p.contato(),
-                true,  // legacy records default to active
+                true,  
                 p.vagasAnteriores() != null ? p.vagasAnteriores() : java.util.List.of(),
                 p.criadoEm());
     }
@@ -1685,7 +1786,7 @@ public class ProjectService {
 
     public void deletePerson(String personId) throws IOException {
         List<Person> all = new ArrayList<>(loadPeople());
-        // Find and remove the person
+        
         Person deleted = all.stream()
                 .filter(p -> p.id().equals(personId))
                 .findFirst()
@@ -1693,7 +1794,7 @@ public class ProjectService {
         all.remove(deleted);
         savePeople(all);
 
-        // Cascade: desassocia o responsavel das atividades de cronograma
+        
         String nome = deleted.nome();
         List<ProjectRecord> projects = new ArrayList<>(load());
         boolean projChanged = false;
@@ -1725,6 +1826,30 @@ public class ProjectService {
             }
         }
         if (projChanged) save(projects);
+
+        // Remove budget allocations associated with this person (by name)
+        List<BudgetAllocation> budgetAllocs = new ArrayList<>(loadBudgetAllocations());
+        Set<String> removedAllocIds = budgetAllocs.stream()
+                .filter(a -> nome != null && nome.equals(a.nomePessoa()))
+                .map(BudgetAllocation::id)
+                .collect(Collectors.toSet());
+        boolean allocChanged = budgetAllocs.removeIf(a -> nome != null && nome.equals(a.nomePessoa()));
+        if (allocChanged) saveBudgetAllocations(budgetAllocs);
+
+        // Cascade: payment states, monthly states and percent configs for deleted allocations
+        if (!removedAllocIds.isEmpty()) {
+            List<AllocationPaymentState> payments = new ArrayList<>(loadAllocationPayments());
+            if (payments.removeIf(p -> removedAllocIds.contains(p.allocationId()))) saveAllocationPayments(payments);
+            List<AllocationMonthlyState> monthly = new ArrayList<>(loadAllocationMonthlyStates());
+            if (monthly.removeIf(m -> removedAllocIds.contains(m.allocationId()))) saveAllocationMonthlyStates(monthly);
+            List<AllocationPercentConfig> pcts = new ArrayList<>(loadAllocationPercents());
+            if (pcts.removeIf(p -> removedAllocIds.contains(p.allocationId()))) saveAllocationPercents(pcts);
+        }
+
+        // Remove absences associated with this person (by id)
+        List<Absence> absences = new ArrayList<>(loadAbsences());
+        boolean absChanged = absences.removeIf(a -> personId.equals(a.pessoaId()));
+        if (absChanged) saveAbsences(absences);
     }
 
     public ImportPeopleCsvResponse importPeopleCsv(ImportPeopleCsvRequest request) throws IOException {
@@ -2064,7 +2189,7 @@ public class ProjectService {
         jsonStore.writeList(peoplePath, people);
     }
 
-    // ── Absences ─────────────────────────────────────────────────────────────
+    
     public List<Absence> listAbsences() throws IOException {
         return loadAbsences();
     }
@@ -2134,14 +2259,15 @@ public class ProjectService {
         jsonStore.writeList(absencesPath, absences);
     }
 
-    // ── Incidents ─────────────────────────────────────────────────────────────
+    
     public List<Incident> listIncidents() throws IOException {
         return loadIncidents().stream().map(this::normalizeIncident).toList();
     }
 
-    public Incident createIncident(CreateIncidentRequest request) throws IOException {
+    public Incident createIncident(CreateIncidentRequest request, String criadoPor) throws IOException {
         validateIncidentRequest(request);
         String initialStatus = normalizeEnum(request.status(), "ABERTO");
+        String dono = (criadoPor == null || criadoPor.isBlank()) ? null : criadoPor.trim();
         List<IncidentHistoryEvent> historico = new ArrayList<>();
         historico.add(new IncidentHistoryEvent(
                 UUID.randomUUID().toString(),
@@ -2164,12 +2290,18 @@ public class ProjectService {
                 request.causaRaiz() == null ? "" : request.causaRaiz().trim(),
                 request.acoesCorrativas() == null ? "" : request.acoesCorrativas().trim(),
                 historico,
-                OffsetDateTime.now());
+                OffsetDateTime.now(),
+                dono);
         List<Incident> all = new ArrayList<>(loadIncidents());
         all.add(created);
         saveIncidents(all);
-        log.info("Incidente criado: id={}, titulo={}, severidade={}", created.id(), created.titulo(), created.severidade());
+        log.info("Incidente criado: id={}, titulo={}, severidade={}, criadoPor={}", created.id(), created.titulo(), created.severidade(), dono);
         return created;
+    }
+
+    /** Sobrecarga usada por importacao CSV (sem usuario logado). */
+    public Incident createIncident(CreateIncidentRequest request) throws IOException {
+        return createIncident(request, null);
     }
 
     public ImportCsvResponse importIncidentsCsv(ImportIncidentsCsvRequest request) throws IOException {
@@ -2240,7 +2372,8 @@ public class ProjectService {
                         request.causaRaiz() == null ? "" : request.causaRaiz().trim(),
                         request.acoesCorrativas() == null ? "" : request.acoesCorrativas().trim(),
                         historico,
-                        current.criadoEm());
+                        current.criadoEm(),
+                        current.criadoPor());
                 all.set(i, updated);
                 saveIncidents(all);
                 return updated;
@@ -2256,6 +2389,27 @@ public class ProjectService {
         saveIncidents(all);
     }
 
+    public Incident transferIncidentDono(String id, String novoDono, String username, String role) throws IOException {
+        if (novoDono == null || novoDono.isBlank()) throw new IllegalArgumentException("Novo dono e obrigatorio.");
+        List<Incident> all = new ArrayList<>(loadIncidents());
+        for (int i = 0; i < all.size(); i++) {
+            Incident item = all.get(i);
+            if (item.id().equals(id)) {
+                boolean isOwner = item.criadoPor() == null || username.equalsIgnoreCase(item.criadoPor());
+                if (!isOwner && !"ADMIN".equals(role))
+                    throw new IllegalArgumentException("Sem permissao para transferir este incidente.");
+                Incident updated = new Incident(item.id(), item.titulo(), item.descricao(), item.tipo(),
+                        item.severidade(), item.status(), item.responsavel(), item.dataOcorrencia(),
+                        item.dataResolucao(), item.impacto(), item.causaRaiz(), item.acoesCorrativas(),
+                        item.historico(), item.criadoEm(), novoDono.trim());
+                all.set(i, updated);
+                saveIncidents(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Incidente nao encontrado.");
+    }
+
     private void validateIncidentRequest(CreateIncidentRequest request) {
         if (request == null || request.titulo() == null || request.titulo().isBlank())
             throw new IllegalArgumentException("Titulo do incidente e obrigatorio.");
@@ -2269,14 +2423,15 @@ public class ProjectService {
         jsonStore.writeList(incidentsPath, incidents);
     }
 
-    // ── Technical Debt ────────────────────────────────────────────────────────
+    
     public List<TechnicalDebt> listTechnicalDebts() throws IOException {
         return loadTechnicalDebts().stream().map(this::normalizeDebt).toList();
     }
 
-    public TechnicalDebt createTechnicalDebt(CreateTechnicalDebtRequest request) throws IOException {
+    public TechnicalDebt createTechnicalDebt(CreateTechnicalDebtRequest request, String criadoPor) throws IOException {
         validateTechnicalDebtRequest(request);
         String initialStatus = normalizeEnum(request.status(), "IDENTIFICADO");
+        String dono = (criadoPor == null || criadoPor.isBlank()) ? null : criadoPor.trim();
         List<TechnicalDebtHistoryEvent> historico = new ArrayList<>();
         historico.add(new TechnicalDebtHistoryEvent(
                 UUID.randomUUID().toString(),
@@ -2299,11 +2454,12 @@ public class ProjectService {
                 request.dataAlvo(),
                 null,
                 historico,
-                OffsetDateTime.now());
+                OffsetDateTime.now(),
+                dono);
         List<TechnicalDebt> all = new ArrayList<>(loadTechnicalDebts());
         all.add(created);
         saveTechnicalDebts(all);
-        log.info("Debito tecnico criado: id={}, titulo={}, prioridade={}", created.id(), created.titulo(), created.prioridade());
+        log.info("Debito tecnico criado: id={}, titulo={}, prioridade={}, criadoPor={}", created.id(), created.titulo(), created.prioridade(), dono);
         return created;
     }
 
@@ -2344,7 +2500,8 @@ public class ProjectService {
                         request.dataAlvo(),
                         resolvidoEm,
                         historico,
-                        current.criadoEm());
+                        current.criadoEm(),
+                        current.criadoPor());
                 all.set(i, updated);
                 saveTechnicalDebts(all);
                 return updated;
@@ -2360,6 +2517,26 @@ public class ProjectService {
         saveTechnicalDebts(all);
     }
 
+    public TechnicalDebt transferTechnicalDebtDono(String id, String novoDono, String username, String role) throws IOException {
+        if (novoDono == null || novoDono.isBlank()) throw new IllegalArgumentException("Novo dono e obrigatorio.");
+        List<TechnicalDebt> all = new ArrayList<>(loadTechnicalDebts());
+        for (int i = 0; i < all.size(); i++) {
+            TechnicalDebt d = all.get(i);
+            if (d.id().equals(id)) {
+                boolean isOwner = d.criadoPor() == null || username.equalsIgnoreCase(d.criadoPor());
+                if (!isOwner && !"ADMIN".equals(role))
+                    throw new IllegalArgumentException("Sem permissao para transferir este debito tecnico.");
+                TechnicalDebt updated = new TechnicalDebt(d.id(), d.titulo(), d.descricao(), d.categoria(),
+                        d.impacto(), d.esforcoEstimado(), d.prioridade(), d.status(), d.responsavel(),
+                        d.projetoRef(), d.dataAlvo(), d.resolvidoEm(), d.historico(), d.criadoEm(), novoDono.trim());
+                all.set(i, updated);
+                saveTechnicalDebts(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Debito tecnico nao encontrado.");
+    }
+
     private void validateTechnicalDebtRequest(CreateTechnicalDebtRequest request) {
         if (request == null || request.titulo() == null || request.titulo().isBlank())
             throw new IllegalArgumentException("Titulo do debito tecnico e obrigatorio.");
@@ -2373,14 +2550,15 @@ public class ProjectService {
         jsonStore.writeList(technicalDebtsPath, debts);
     }
 
-    // ── Indicators ────────────────────────────────────────────────────────────
+    
     public List<Indicator> listIndicators() throws IOException {
         return loadIndicators().stream().map(this::normalizeIndicator).toList();
     }
 
-    public Indicator createIndicator(CreateIndicatorRequest request) throws IOException {
+    public Indicator createIndicator(CreateIndicatorRequest request, String criadoPor) throws IOException {
         if (request == null || request.titulo() == null || request.titulo().isBlank())
             throw new IllegalArgumentException("Titulo do indicador e obrigatorio.");
+        String dono = (criadoPor == null || criadoPor.isBlank()) ? null : criadoPor.trim();
         Indicator created = new Indicator(
                 UUID.randomUUID().toString(),
                 request.titulo().trim(),
@@ -2395,11 +2573,12 @@ public class ProjectService {
                 normalizeEnum(request.status(), "ATIVO"),
                 new ArrayList<>(),
                 new ArrayList<>(),
-                OffsetDateTime.now());
+                OffsetDateTime.now(),
+                dono);
         List<Indicator> all = new ArrayList<>(loadIndicators());
         all.add(created);
         saveIndicators(all);
-        log.info("Indicador criado: id={}, titulo={}, tipo={}", created.id(), created.titulo(), created.tipo());
+        log.info("Indicador criado: id={}, titulo={}, tipo={}, criadoPor={}", created.id(), created.titulo(), created.tipo(), dono);
         return created;
     }
 
@@ -2424,7 +2603,8 @@ public class ProjectService {
                         normalizeEnum(request.status(), "ATIVO"),
                         curr.ciclos(),
                         curr.acoes(),
-                        curr.criadoEm());
+                        curr.criadoEm(),
+                        curr.criadoPor());
                 all.set(i, updated);
                 saveIndicators(all);
                 return updated;
@@ -2438,6 +2618,27 @@ public class ProjectService {
         boolean removed = all.removeIf(i -> i.id().equals(indicatorId));
         if (!removed) throw new IllegalArgumentException("Indicador nao encontrado.");
         saveIndicators(all);
+    }
+
+    public Indicator transferIndicatorDono(String id, String novoDono, String username, String role) throws IOException {
+        if (novoDono == null || novoDono.isBlank()) throw new IllegalArgumentException("Novo dono e obrigatorio.");
+        List<Indicator> all = new ArrayList<>(loadIndicators());
+        for (int i = 0; i < all.size(); i++) {
+            Indicator ind = all.get(i);
+            if (ind.id().equals(id)) {
+                boolean isOwner = ind.criadoPor() == null || username.equalsIgnoreCase(ind.criadoPor());
+                if (!isOwner && !"ADMIN".equals(role))
+                    throw new IllegalArgumentException("Sem permissao para transferir este indicador.");
+                Indicator updated = new Indicator(ind.id(), ind.titulo(), ind.descricao(), ind.tipo(),
+                        ind.categoria(), ind.unidade(), ind.meta(), ind.polaridade(), ind.frequencia(),
+                        ind.responsavel(), ind.status(), safeIndList(ind.ciclos()), safeIndList(ind.acoes()),
+                        ind.criadoEm(), novoDono.trim());
+                all.set(i, updated);
+                saveIndicators(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Indicador nao encontrado.");
     }
 
     public Indicator addIndicatorCycle(String indicatorId, CreateIndicatorCycleRequest request) throws IOException {
@@ -2456,7 +2657,7 @@ public class ProjectService {
                         request.observacao() == null ? "" : request.observacao().trim(),
                         request.dataReferencia() == null ? OffsetDateTime.now() : request.dataReferencia(),
                         OffsetDateTime.now()));
-                // Mark specified actions as concluded in this cycle
+                
                 List<IndicatorAction> acoes = new ArrayList<>(safeIndList(curr.acoes()));
                 java.util.Set<String> toClose = request.acoesConcluidasIds() == null
                         ? java.util.Set.of()
@@ -2472,7 +2673,7 @@ public class ProjectService {
                 Indicator updated = new Indicator(
                         curr.id(), curr.titulo(), curr.descricao(), curr.tipo(), curr.categoria(),
                         curr.unidade(), curr.meta(), curr.polaridade(), curr.frequencia(),
-                        curr.responsavel(), curr.status(), ciclos, acoes, curr.criadoEm());
+                        curr.responsavel(), curr.status(), ciclos, acoes, curr.criadoEm(), curr.criadoPor());
                 all.set(i, updated);
                 saveIndicators(all);
                 log.info("Ciclo adicionado: indicatorId={}, ciclo={}, valor={}", indicatorId, nextNum, request.valor());
@@ -2507,7 +2708,7 @@ public class ProjectService {
                 Indicator updated = new Indicator(
                         curr.id(), curr.titulo(), curr.descricao(), curr.tipo(), curr.categoria(),
                         curr.unidade(), curr.meta(), curr.polaridade(), curr.frequencia(),
-                        curr.responsavel(), curr.status(), ciclos, safeIndList(curr.acoes()), curr.criadoEm());
+                        curr.responsavel(), curr.status(), ciclos, safeIndList(curr.acoes()), curr.criadoEm(), curr.criadoPor());
                 all.set(i, updated);
                 saveIndicators(all);
                 return updated;
@@ -2527,7 +2728,7 @@ public class ProjectService {
                 Indicator updated = new Indicator(
                         curr.id(), curr.titulo(), curr.descricao(), curr.tipo(), curr.categoria(),
                         curr.unidade(), curr.meta(), curr.polaridade(), curr.frequencia(),
-                        curr.responsavel(), curr.status(), ciclos, safeIndList(curr.acoes()), curr.criadoEm());
+                        curr.responsavel(), curr.status(), ciclos, safeIndList(curr.acoes()), curr.criadoEm(), curr.criadoPor());
                 all.set(i, updated);
                 saveIndicators(all);
                 return updated;
@@ -2559,7 +2760,7 @@ public class ProjectService {
                 Indicator updated = new Indicator(
                         curr.id(), curr.titulo(), curr.descricao(), curr.tipo(), curr.categoria(),
                         curr.unidade(), curr.meta(), curr.polaridade(), curr.frequencia(),
-                        curr.responsavel(), curr.status(), ciclos, acoes, curr.criadoEm());
+                        curr.responsavel(), curr.status(), ciclos, acoes, curr.criadoEm(), curr.criadoPor());
                 all.set(i, updated);
                 saveIndicators(all);
                 return updated;
@@ -2601,7 +2802,7 @@ public class ProjectService {
                 Indicator updated = new Indicator(
                         curr.id(), curr.titulo(), curr.descricao(), curr.tipo(), curr.categoria(),
                         curr.unidade(), curr.meta(), curr.polaridade(), curr.frequencia(),
-                        curr.responsavel(), curr.status(), ciclos, acoes, curr.criadoEm());
+                        curr.responsavel(), curr.status(), ciclos, acoes, curr.criadoEm(), curr.criadoPor());
                 all.set(i, updated);
                 saveIndicators(all);
                 return updated;
@@ -2621,7 +2822,7 @@ public class ProjectService {
                 Indicator updated = new Indicator(
                         curr.id(), curr.titulo(), curr.descricao(), curr.tipo(), curr.categoria(),
                         curr.unidade(), curr.meta(), curr.polaridade(), curr.frequencia(),
-                        curr.responsavel(), curr.status(), curr.ciclos(), acoes, curr.criadoEm());
+                        curr.responsavel(), curr.status(), curr.ciclos(), acoes, curr.criadoEm(), curr.criadoPor());
                 all.set(i, updated);
                 saveIndicators(all);
                 return updated;
@@ -2638,7 +2839,7 @@ public class ProjectService {
                 ind.responsavel(), ind.status(),
                 ind.ciclos() == null ? new ArrayList<>() : ind.ciclos(),
                 ind.acoes() == null ? new ArrayList<>() : ind.acoes(),
-                ind.criadoEm());
+                ind.criadoEm(), ind.criadoPor());
     }
 
     private <T> List<T> safeIndList(List<T> list) {
@@ -2671,7 +2872,7 @@ public class ProjectService {
         return new Incident(
                 i.id(), i.titulo(), i.descricao(), i.tipo(), i.severidade(), i.status(),
                 i.responsavel(), i.dataOcorrencia(), i.dataResolucao(), i.impacto(),
-                i.causaRaiz(), i.acoesCorrativas(), new ArrayList<>(), i.criadoEm());
+                i.causaRaiz(), i.acoesCorrativas(), new ArrayList<>(), i.criadoEm(), i.criadoPor());
     }
 
     private TechnicalDebt normalizeDebt(TechnicalDebt d) {
@@ -2679,7 +2880,7 @@ public class ProjectService {
         return new TechnicalDebt(
                 d.id(), d.titulo(), d.descricao(), d.categoria(), d.impacto(),
                 d.esforcoEstimado(), d.prioridade(), d.status(), d.responsavel(),
-                d.projetoRef(), d.dataAlvo(), d.resolvidoEm(), new ArrayList<>(), d.criadoEm());
+                d.projetoRef(), d.dataAlvo(), d.resolvidoEm(), new ArrayList<>(), d.criadoEm(), d.criadoPor());
     }
 
     private List<MonthlyHours> loadMonthlyHours() throws IOException {
@@ -2714,6 +2915,81 @@ public class ProjectService {
         jsonStore.writeList(allocationMonthlyStatePath, states);
     }
 
+    // ── AllocationPercent ─────────────────────────────────────────────────────
+
+    private List<AllocationPercentConfig> loadAllocationPercents() throws IOException {
+        return jsonStore.readList(allocationPercentPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveAllocationPercents(List<AllocationPercentConfig> configs) throws IOException {
+        jsonStore.writeList(allocationPercentPath, configs);
+    }
+
+    public List<AllocationPercentConfig> listAllocationPercents() throws IOException {
+        List<AllocationPercentConfig> all = new ArrayList<>(loadAllocationPercents());
+        all.sort(Comparator.comparing(AllocationPercentConfig::allocationId, Comparator.nullsLast(String::compareTo)));
+        return all;
+    }
+
+    public AllocationPercentConfig upsertAllocationPercent(String allocationId, BigDecimal percentual, String user) throws IOException {
+        if (allocationId == null || allocationId.isBlank())
+            throw new IllegalArgumentException("allocationId e obrigatorio.");
+        BigDecimal pct = percentual != null ? percentual : BigDecimal.ZERO;
+        AllocationPercentConfig updated = new AllocationPercentConfig(
+                allocationId.trim(), pct, OffsetDateTime.now(), user);
+        List<AllocationPercentConfig> all = new ArrayList<>(loadAllocationPercents());
+        boolean replaced = false;
+        for (int i = 0; i < all.size(); i++) {
+            if (allocationId.trim().equals(all.get(i).allocationId())) {
+                all.set(i, updated);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) all.add(updated);
+        saveAllocationPercents(all);
+        return updated;
+    }
+
+    // ── LoRealizado ───────────────────────────────────────────────────────────
+
+    private List<LoRealizadoConfig> loadLoRealizado() throws IOException {
+        return jsonStore.readList(loRealizadoPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveLoRealizado(List<LoRealizadoConfig> configs) throws IOException {
+        jsonStore.writeList(loRealizadoPath, configs);
+    }
+
+    public List<LoRealizadoConfig> listLoRealizado() throws IOException {
+        List<LoRealizadoConfig> all = new ArrayList<>(loadLoRealizado());
+        all.sort(Comparator.comparing(LoRealizadoConfig::loId, Comparator.nullsLast(String::compareTo))
+                .thenComparingInt(LoRealizadoConfig::month));
+        return all;
+    }
+
+    public LoRealizadoConfig upsertLoRealizado(String loId, int month, BigDecimal valor, String user) throws IOException {
+        if (loId == null || loId.isBlank())
+            throw new IllegalArgumentException("loId e obrigatorio.");
+        if (month < 0 || month > 11)
+            throw new IllegalArgumentException("Mes invalido (0-11).");
+        BigDecimal v = valor != null ? valor : BigDecimal.ZERO;
+        LoRealizadoConfig updated = new LoRealizadoConfig(loId.trim(), month, v, OffsetDateTime.now(), user);
+        List<LoRealizadoConfig> all = new ArrayList<>(loadLoRealizado());
+        boolean replaced = false;
+        for (int i = 0; i < all.size(); i++) {
+            LoRealizadoConfig curr = all.get(i);
+            if (loId.trim().equals(curr.loId()) && month == curr.month()) {
+                all.set(i, updated);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) all.add(updated);
+        saveLoRealizado(all);
+        return updated;
+    }
+
     private List<AllocationCursorState> loadAllocationCursors() throws IOException {
         return jsonStore.readList(allocationCursorsPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
     }
@@ -2738,7 +3014,7 @@ public class ProjectService {
         jsonStore.writeList(focalPointsPath, focalPoints);
     }
 
-    // ── Feriados ──────────────────────────────────────────────────────────────
+    
 
     private static final java.util.List<Boolean> DEFAULT_DIAS_UTEIS =
             java.util.List.of(false, true, true, true, true, true, false);
@@ -2760,7 +3036,7 @@ public class ProjectService {
         return toSave;
     }
 
-    // ── Gantt Configuration ───────────────────────────────────────────────────
+    
 
     public GanttProjectConfig getGanttConfig(String projectId) throws IOException {
         return loadGanttConfigs().stream()
@@ -2817,6 +3093,8 @@ public class ProjectService {
             ensureFile(allocationMonthlyStatePath);
             ensureFile(allocationCursorsPath);
             ensureFile(ganttConfigsPath);
+            ensureFile(allocationPercentPath);
+            ensureFile(loRealizadoPath);
             ensureFileObject(feriadosPath);
         } catch (IOException ex) {
             throw new IllegalStateException("Falha ao inicializar arquivos de dados.", ex);
@@ -2883,7 +3161,7 @@ public class ProjectService {
                 throw new IllegalArgumentException("Prestador de servico nao encontrado. Cadastre antes de continuar.");
             }
         }
-        // Para BV, valor mensal nao e obrigatorio: quando ausente, assume valor do perfil.
+        
     }
 
     private BigDecimal resolveValorHora(CreatePersonRequest request, Profile profile) throws IOException {

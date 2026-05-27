@@ -44,7 +44,7 @@ public final class AuthModels {
     public record UpdateProfileImageRequest(String dataUrl) {}
     public record ChangePasswordRequest(String senhaAtual, String novaSenha) {}
 
-    // ── Admin user management ─────────────────────────────────────────────
+    
     public record AdminUserView(
             String username,
             String nome,

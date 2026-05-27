@@ -1,4 +1,4 @@
-package com.planner.backend.auth;
+﻿package com.planner.backend.auth;
 
 import static com.planner.backend.auth.AuthModels.*;
 
@@ -23,28 +23,30 @@ public class AuthController {
 
     @PostMapping("/register")
     public AuthResponse register(@RequestBody AuthRequest request) throws IOException {
+        log.info("POST /api/auth/register username={}", request != null ? request.username() : null);
         return authService.register(request);
     }
 
     @PostMapping("/login")
     public AuthResponse login(@RequestBody AuthRequest request) throws IOException {
+        log.info("POST /api/auth/login username={}", request != null ? request.username() : null);
         return authService.login(request);
     }
 
     @PostMapping("/logout")
     public Map<String, String> logout(
             @RequestHeader(value = "X-Auth-Token", required = false) String token) throws IOException {
+        log.info("POST /api/auth/logout tokenPresent={}", token != null && !token.isBlank());
         authService.logout(token);
-        return Map.of("message", "Sessão encerrada.");
+        return Map.of("message", "Sessao encerrada.");
     }
 
     @GetMapping("/me")
     public AccountResponse me(
             @RequestHeader(value = "X-Auth-Token", required = false) String token) throws IOException {
+        log.info("GET /api/auth/me tokenPresent={}", token != null && !token.isBlank());
         return authService.me(token);
     }
-
-    // ── Admin: user management ────────────────────────────────────────────
 
     @GetMapping("/users")
     public List<AdminUserView> listUsers(
