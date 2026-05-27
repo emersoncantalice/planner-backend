@@ -3042,14 +3042,16 @@ public class ProjectService {
         return loadGanttConfigs().stream()
                 .filter(c -> projectId.equals(c.projectId()))
                 .findFirst()
-                .orElse(new GanttProjectConfig(projectId, new ArrayList<>(), new java.util.HashMap<>()));
+                .orElse(new GanttProjectConfig(projectId, new ArrayList<>(), new java.util.HashMap<>(), null, new java.util.HashMap<>()));
     }
 
     public GanttProjectConfig saveGanttConfig(String projectId, SaveGanttConfigRequest request) throws IOException {
         GanttProjectConfig newConfig = new GanttProjectConfig(
                 projectId,
                 request == null || request.markers() == null ? new ArrayList<>() : request.markers(),
-                request == null || request.meta() == null ? new java.util.HashMap<>() : request.meta());
+                request == null || request.meta() == null ? new java.util.HashMap<>() : request.meta(),
+                request == null ? null : request.rowHeight(),
+                request == null || request.rowHeights() == null ? new java.util.HashMap<>() : request.rowHeights());
         List<GanttProjectConfig> all = new ArrayList<>(loadGanttConfigs());
         boolean replaced = false;
         for (int i = 0; i < all.size(); i++) {

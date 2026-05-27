@@ -599,10 +599,14 @@ public final class ProjectModels {
     public record GanttProjectConfig(
             String projectId,
             List<GanttMarker> markers,
-            java.util.Map<String, GanttItemMeta> meta) {}
+            java.util.Map<String, GanttItemMeta> meta,
+            Integer rowHeight,
+            java.util.Map<String, Integer> rowHeights) {}
     public record SaveGanttConfigRequest(
             List<GanttMarker> markers,
-            java.util.Map<String, GanttItemMeta> meta) {}
+            java.util.Map<String, GanttItemMeta> meta,
+            Integer rowHeight,
+            java.util.Map<String, Integer> rowHeights) {}
 
     public record TransferOwnershipRequest(String novoDono) {}
 
