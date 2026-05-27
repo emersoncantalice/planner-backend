@@ -1,4 +1,4 @@
-﻿package com.planner.backend.auth;
+package com.planner.backend.auth;
 
 import static com.planner.backend.auth.AuthModels.*;
 
