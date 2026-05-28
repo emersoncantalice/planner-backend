@@ -44,7 +44,8 @@ public class DataFilesInitializer implements ApplicationRunner {
                 "indicators.json",
                 "gantt-configs.json",
                 "allocation-percent.json",
-                "lo-realizado.json");
+                "lo-realizado.json",
+                "project-budgets.json");
 
         for (String fileName : requiredFiles) {
             ensureFile(Path.of(dataDir, fileName), "[]");

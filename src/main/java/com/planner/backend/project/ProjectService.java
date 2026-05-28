@@ -46,6 +46,7 @@ public class ProjectService {
     private final java.nio.file.Path ganttConfigsPath;
     private final java.nio.file.Path allocationPercentPath;
     private final java.nio.file.Path loRealizadoPath;
+    private final java.nio.file.Path projectBudgetsPath;
     private final com.planner.backend.auth.FileJsonStore jsonStore;
 
     public ProjectService(
@@ -76,6 +77,7 @@ public class ProjectService {
         this.ganttConfigsPath = java.nio.file.Path.of(dataDir, "gantt-configs.json");
         this.allocationPercentPath = java.nio.file.Path.of(dataDir, "allocation-percent.json");
         this.loRealizadoPath = java.nio.file.Path.of(dataDir, "lo-realizado.json");
+        this.projectBudgetsPath = java.nio.file.Path.of(dataDir, "project-budgets.json");
         ensureDataFiles();
     }
 
@@ -3097,6 +3099,7 @@ public class ProjectService {
             ensureFile(ganttConfigsPath);
             ensureFile(allocationPercentPath);
             ensureFile(loRealizadoPath);
+            ensureFile(projectBudgetsPath);
             ensureFileObject(feriadosPath);
         } catch (IOException ex) {
             throw new IllegalStateException("Falha ao inicializar arquivos de dados.", ex);
@@ -3362,6 +3365,65 @@ public class ProjectService {
         if (request.telefone() == null || request.telefone().isBlank()) {
             throw new IllegalArgumentException("Telefone do ponto focal e obrigatorio.");
         }
+    }
+
+    // ── Project Budgets ────────────────────────────────────────────────────────
+
+    public List<ProjectBudget> listProjectBudgets() throws IOException {
+        return loadProjectBudgets();
+    }
+
+    public ProjectBudget createProjectBudget(CreateProjectBudgetRequest req, String criadoPor) throws IOException {
+        if (req == null || req.nome() == null || req.nome().isBlank())
+            throw new IllegalArgumentException("Nome do orcamento e obrigatorio.");
+        ProjectBudget created = new ProjectBudget(
+                UUID.randomUUID().toString(),
+                req.nome().trim(),
+                req.descricao(),
+                req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                OffsetDateTime.now(),
+                criadoPor);
+        List<ProjectBudget> all = new ArrayList<>(loadProjectBudgets());
+        all.add(created);
+        saveProjectBudgets(all);
+        return created;
+    }
+
+    public ProjectBudget updateProjectBudget(String id, CreateProjectBudgetRequest req) throws IOException {
+        if (req == null || req.nome() == null || req.nome().isBlank())
+            throw new IllegalArgumentException("Nome do orcamento e obrigatorio.");
+        List<ProjectBudget> all = new ArrayList<>(loadProjectBudgets());
+        for (int i = 0; i < all.size(); i++) {
+            ProjectBudget curr = all.get(i);
+            if (curr.id().equals(id)) {
+                ProjectBudget updated = new ProjectBudget(
+                        curr.id(),
+                        req.nome().trim(),
+                        req.descricao(),
+                        req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                        curr.criadoEm(),
+                        curr.criadoPor());
+                all.set(i, updated);
+                saveProjectBudgets(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Orcamento nao encontrado.");
+    }
+
+    public void deleteProjectBudget(String id) throws IOException {
+        List<ProjectBudget> all = new ArrayList<>(loadProjectBudgets());
+        boolean removed = all.removeIf(b -> b.id().equals(id));
+        if (!removed) throw new IllegalArgumentException("Orcamento nao encontrado.");
+        saveProjectBudgets(all);
+    }
+
+    private List<ProjectBudget> loadProjectBudgets() throws IOException {
+        return jsonStore.readList(projectBudgetsPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveProjectBudgets(List<ProjectBudget> budgets) throws IOException {
+        jsonStore.writeList(projectBudgetsPath, budgets);
     }
 
     @FunctionalInterface

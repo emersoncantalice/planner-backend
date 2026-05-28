@@ -688,6 +688,31 @@ public class ProjectController {
         return projectService.saveGanttConfig(projectId, request);
     }
 
+    // ── Project Budgets ────────────────────────────────────────────────────────
+
+    @GetMapping("/project-budgets")
+    public List<ProjectBudget> listProjectBudgets() throws IOException {
+        return projectService.listProjectBudgets();
+    }
+
+    @PostMapping("/project-budgets")
+    public ProjectBudget createProjectBudget(@RequestBody CreateProjectBudgetRequest request,
+                                              HttpServletRequest req) throws IOException {
+        return projectService.createProjectBudget(request, username(req));
+    }
+
+    @PutMapping("/project-budgets/{id}")
+    public ProjectBudget updateProjectBudget(@PathVariable String id,
+                                              @RequestBody CreateProjectBudgetRequest request) throws IOException {
+        return projectService.updateProjectBudget(id, request);
+    }
+
+    @DeleteMapping("/project-budgets/{id}")
+    public ResponseEntity<Void> deleteProjectBudget(@PathVariable String id) throws IOException {
+        projectService.deleteProjectBudget(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));

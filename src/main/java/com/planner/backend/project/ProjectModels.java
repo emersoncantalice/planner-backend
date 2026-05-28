@@ -608,6 +608,29 @@ public final class ProjectModels {
             Integer rowHeight,
             java.util.Map<String, Integer> rowHeights) {}
 
+    // ── Project Budgets ────────────────────────────────────────────────────────
+    public record ProjectBudgetActivity(
+            String id,
+            String nome,
+            String perfilId,
+            Double horas,
+            String dataInicio,
+            String dataFim,
+            String cor) {}
+
+    public record ProjectBudget(
+            String id,
+            String nome,
+            String descricao,
+            List<ProjectBudgetActivity> atividades,
+            OffsetDateTime criadoEm,
+            String criadoPor) {}
+
+    public record CreateProjectBudgetRequest(
+            String nome,
+            String descricao,
+            List<ProjectBudgetActivity> atividades) {}
+
     public record TransferOwnershipRequest(String novoDono) {}
 
     public record ReplaceOwnershipRequest(
