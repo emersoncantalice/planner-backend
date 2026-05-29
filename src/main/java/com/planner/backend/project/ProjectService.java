@@ -1,4 +1,4 @@
-package com.planner.backend.project;
+﻿package com.planner.backend.project;
 
 import static com.planner.backend.project.ProjectModels.*;
 
@@ -288,11 +288,11 @@ public class ProjectService {
 
     public ProjectRecord updateSituacao(String projectId, String situacao, String username, String role) throws IOException {
         if (!"DRAFT".equals(situacao) && !"PUBLISHED".equals(situacao))
-            throw new IllegalArgumentException("Situação inválida. Use DRAFT ou PUBLISHED.");
+            throw new IllegalArgumentException("SituaÃ§Ã£o invÃ¡lida. Use DRAFT ou PUBLISHED.");
         return update(projectId, p -> {
             boolean isOwner = username.equalsIgnoreCase(p.donoProjeto()) || p.donoProjeto() == null;
             if (!isOwner && !"ADMIN".equals(role))
-                throw new IllegalArgumentException("Sem permissão para alterar a situação deste projeto.");
+                throw new IllegalArgumentException("Sem permissÃ£o para alterar a situaÃ§Ã£o deste projeto.");
             return new ProjectRecord(p.id(), p.nome(), p.descricao(), p.criadoEm(),
                     p.etapas(), p.cronograma(), p.alocacoes(), p.financeiro(),
                     p.riscos(), safeReplanList(p.historicoReplanejamento()),
@@ -520,14 +520,14 @@ public class ProjectService {
 
     public BudgetLine updateBudgetLineSituacao(String id, String situacao, String username, String role) throws IOException {
         if (!"DRAFT".equals(situacao) && !"PUBLISHED".equals(situacao))
-            throw new IllegalArgumentException("Situação inválida. Use DRAFT ou PUBLISHED.");
+            throw new IllegalArgumentException("SituaÃ§Ã£o invÃ¡lida. Use DRAFT ou PUBLISHED.");
         List<BudgetLine> all = new ArrayList<>(loadBudgetLines());
         for (int i = 0; i < all.size(); i++) {
             BudgetLine lo = all.get(i);
             if (lo.id().equals(id)) {
                 boolean isOwner = username.equalsIgnoreCase(lo.dono()) || lo.dono() == null;
                 if (!isOwner && !"ADMIN".equals(role))
-                    throw new IllegalArgumentException("Sem permissão para alterar a situação desta LO.");
+                    throw new IllegalArgumentException("Sem permissÃ£o para alterar a situaÃ§Ã£o desta LO.");
                 BudgetLine updated = new BudgetLine(lo.id(), lo.codigo(), lo.nome(), lo.ano(),
                         lo.tipo(), lo.centroCusto(), lo.valorTotal(), lo.criadoEm(), situacao, lo.dono());
                 all.set(i, updated);
@@ -535,7 +535,7 @@ public class ProjectService {
                 return updated;
             }
         }
-        throw new IllegalArgumentException("LO não encontrada.");
+        throw new IllegalArgumentException("LO nÃ£o encontrada.");
     }
 
     public BudgetLine createBudgetLine(CreateBudgetLineRequest request, String dono) throws IOException {
@@ -857,85 +857,139 @@ public class ProjectService {
     }
 
     public BudgetAllocation createBudgetAllocation(CreateBudgetAllocationRequest request) throws IOException {
-        if (request == null || request.linhaOrcamentariaId() == null || request.linhaOrcamentariaId().isBlank()) {
+        if (request.linhaOrcamentariaId() == null || request.linhaOrcamentariaId().isBlank())
             throw new IllegalArgumentException("LO da alocacao e obrigatoria.");
-        }
-        if (request.nomePessoa() == null || request.nomePessoa().isBlank()) {
-            throw new IllegalArgumentException("Nome da pessoa e obrigatorio.");
-        }
-        if (request.perfilId() == null || request.perfilId().isBlank()) {
+        if (request.perfilId() == null || request.perfilId().isBlank())
             throw new IllegalArgumentException("Perfil e obrigatorio.");
-        }
-        if (request.horasPlanejadas() <= 0) {
+        if (request.horasPlanejadas() <= 0)
             throw new IllegalArgumentException("Horas planejadas deve ser maior que zero.");
-        }
 
-        Profile profile = loadProfiles().stream()
-                .filter(p -> p.id().equals(request.perfilId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Perfil nao encontrado."));
+        boolean isDraft = Boolean.TRUE.equals(request.draft());
+
         BudgetLine lo = loadBudgetLines().stream()
                 .filter(b -> b.id().equals(request.linhaOrcamentariaId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("LO nao encontrada."));
 
-        BigDecimal valorHoraAplicado = resolveValorHoraPessoa(request.nomePessoa(), profile);
+        boolean loDraft = "DRAFT".equals(lo.situacao());
+        if (loDraft && !isDraft)
+            throw new IllegalArgumentException("Esta LO Ã© um rascunho. SÃ³ Ã© possÃ­vel adicionar alocaÃ§Ãµes do tipo rascunho.");
+
+        if (!isDraft && (request.nomePessoa() == null || request.nomePessoa().isBlank()))
+            throw new IllegalArgumentException("Nome da pessoa e obrigatorio.");
+
+        Profile profile = loadProfiles().stream()
+                .filter(p -> p.id().equals(request.perfilId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Perfil nao encontrado."));
+
+        List<BudgetAllocation> existingAll = loadBudgetAllocations();
+        String nomePessoa = (request.nomePessoa() == null || request.nomePessoa().isBlank())
+                ? nextPessoaPlaneadaNome(existingAll, lo.id())
+                : request.nomePessoa().trim();
+
+        BigDecimal valorHoraAplicado = resolveValorHoraPessoa(nomePessoa, profile);
         BigDecimal custo = valorHoraAplicado.multiply(BigDecimal.valueOf(request.horasPlanejadas()));
+        int mesInicio = request.mesInicio() != null ? Math.max(0, Math.min(11, request.mesInicio())) : 0;
+
         BudgetAllocation created = new BudgetAllocation(
                 UUID.randomUUID().toString(),
-                lo.id(),
-                lo.codigo(),
-                request.nomePessoa().trim(),
-                profile.id(),
-                profile.nomePerfil(),
-                valorHoraAplicado,
-                profile.debitaLo(),
-                request.horasPlanejadas(),
-                custo,
-                OffsetDateTime.now());
-        List<BudgetAllocation> all = new ArrayList<>(loadBudgetAllocations());
+                lo.id(), lo.codigo(),
+                nomePessoa,
+                profile.id(), profile.nomePerfil(),
+                valorHoraAplicado, loDraft ? false : profile.debitaLo(),
+                request.horasPlanejadas(), custo,
+                OffsetDateTime.now(),
+                isDraft ? true : null,
+                mesInicio > 0 ? mesInicio : null);
+
+        List<BudgetAllocation> all = new ArrayList<>(existingAll);
         all.add(created);
         saveBudgetAllocations(all);
+
+        if (mesInicio > 0) autoApplyMesInicio(created.id(), mesInicio);
+
         return created;
     }
 
+    private String nextPessoaPlaneadaNome(List<BudgetAllocation> all, String loId) {
+        long count = all.stream()
+                .filter(a -> loId.equals(a.linhaOrcamentariaId()))
+                .filter(a -> a.nomePessoa() != null && a.nomePessoa().startsWith("Pessoa Planejada "))
+                .count();
+        return "Pessoa Planejada " + (count + 1);
+    }
+
     public BudgetAllocation updateBudgetAllocation(String allocationId, CreateBudgetAllocationRequest request) throws IOException {
-        if (request == null || request.linhaOrcamentariaId() == null || request.linhaOrcamentariaId().isBlank()) {
+        if (request.linhaOrcamentariaId() == null || request.linhaOrcamentariaId().isBlank())
             throw new IllegalArgumentException("LO da alocacao e obrigatoria.");
-        }
-        if (request.nomePessoa() == null || request.nomePessoa().isBlank()) {
+        if (request.nomePessoa() == null || request.nomePessoa().isBlank())
             throw new IllegalArgumentException("Nome da pessoa e obrigatorio.");
-        }
-        if (request.perfilId() == null || request.perfilId().isBlank()) {
+        if (request.perfilId() == null || request.perfilId().isBlank())
             throw new IllegalArgumentException("Perfil e obrigatorio.");
-        }
-        if (request.horasPlanejadas() <= 0) {
+        if (request.horasPlanejadas() <= 0)
             throw new IllegalArgumentException("Horas planejadas deve ser maior que zero.");
-        }
-        Profile profile = loadProfiles().stream()
-                .filter(p -> p.id().equals(request.perfilId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Perfil nao encontrado."));
+
+        boolean isDraft = Boolean.TRUE.equals(request.draft());
+
         BudgetLine lo = loadBudgetLines().stream()
                 .filter(b -> b.id().equals(request.linhaOrcamentariaId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("LO nao encontrada."));
+
+        boolean loDraft = "DRAFT".equals(lo.situacao());
+        if (loDraft && !isDraft)
+            throw new IllegalArgumentException("Esta LO Ã© um rascunho. SÃ³ Ã© possÃ­vel ter alocaÃ§Ãµes do tipo rascunho.");
+
+        Profile profile = loadProfiles().stream()
+                .filter(p -> p.id().equals(request.perfilId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Perfil nao encontrado."));
 
         List<BudgetAllocation> all = new ArrayList<>(loadBudgetAllocations());
         for (int i = 0; i < all.size(); i++) {
             BudgetAllocation a = all.get(i);
-            if (a.id().equals(allocationId)) {
-                BigDecimal valorHoraAplicado = resolveValorHoraPessoa(request.nomePessoa(), profile);
-                BigDecimal custo = valorHoraAplicado.multiply(BigDecimal.valueOf(request.horasPlanejadas()));
-                BudgetAllocation updated = new BudgetAllocation(
-                        a.id(), lo.id(), lo.codigo(), request.nomePessoa().trim(), profile.id(), profile.nomePerfil(),
-                        valorHoraAplicado, profile.debitaLo(), request.horasPlanejadas(), custo, a.criadoEm());
-                all.set(i, updated);
-                saveBudgetAllocations(all);
-                return updated;
-            }
+            if (!a.id().equals(allocationId)) continue;
+
+            BigDecimal valorHoraAplicado = resolveValorHoraPessoa(request.nomePessoa(), profile);
+            BigDecimal custo = valorHoraAplicado.multiply(BigDecimal.valueOf(request.horasPlanejadas()));
+            int mesInicio = request.mesInicio() != null ? Math.max(0, Math.min(11, request.mesInicio())) : 0;
+
+            BudgetAllocation updated = new BudgetAllocation(
+                    a.id(), lo.id(), lo.codigo(), request.nomePessoa().trim(),
+                    profile.id(), profile.nomePerfil(),
+                    valorHoraAplicado, isDraft ? false : profile.debitaLo(),
+                    request.horasPlanejadas(), custo, a.criadoEm(),
+                    isDraft ? true : null,
+                    mesInicio > 0 ? mesInicio : null);
+
+            all.set(i, updated);
+            saveBudgetAllocations(all);
+            if (mesInicio > 0) autoApplyMesInicio(allocationId, mesInicio);
+            return updated;
         }
         throw new IllegalArgumentException("Alocacao LO nao encontrada.");
+    }
+
+    private void autoApplyMesInicio(String allocationId, int mesInicio) throws IOException {
+        if (mesInicio <= 0) return;
+        List<AllocationMonthlyState> all = new ArrayList<>(loadAllocationMonthlyStates());
+        for (int m = 0; m < mesInicio; m++) {
+            final int month = m;
+            boolean found = false;
+            for (int i = 0; i < all.size(); i++) {
+                AllocationMonthlyState s = all.get(i);
+                if (allocationId.equals(s.allocationId()) && s.month() == month) {
+                    all.set(i, new AllocationMonthlyState(allocationId, month, true, s.manualValue(), s.manualPercent(), OffsetDateTime.now(), "system"));
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                all.add(new AllocationMonthlyState(allocationId, month, true, null, null, OffsetDateTime.now(), "system"));
+            }
+        }
+        saveAllocationMonthlyStates(all);
     }
 
     public void deleteBudgetAllocation(String allocationId) throws IOException {
@@ -2438,7 +2492,7 @@ public class ProjectService {
         historico.add(new TechnicalDebtHistoryEvent(
                 UUID.randomUUID().toString(),
                 "CRIACAO",
-                "Débito técnico registrado.",
+                "DÃ©bito tÃ©cnico registrado.",
                 null,
                 initialStatus,
                 OffsetDateTime.now()));
@@ -2917,7 +2971,7 @@ public class ProjectService {
         jsonStore.writeList(allocationMonthlyStatePath, states);
     }
 
-    // ── AllocationPercent ─────────────────────────────────────────────────────
+    // â”€â”€ AllocationPercent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private List<AllocationPercentConfig> loadAllocationPercents() throws IOException {
         return jsonStore.readList(allocationPercentPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
@@ -2953,7 +3007,7 @@ public class ProjectService {
         return updated;
     }
 
-    // ── LoRealizado ───────────────────────────────────────────────────────────
+    // â”€â”€ LoRealizado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private List<LoRealizadoConfig> loadLoRealizado() throws IOException {
         return jsonStore.readList(loRealizadoPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
@@ -3367,7 +3421,7 @@ public class ProjectService {
         }
     }
 
-    // ── Project Budgets ────────────────────────────────────────────────────────
+    // â”€â”€ Project Budgets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public List<ProjectBudget> listProjectBudgets() throws IOException {
         return loadProjectBudgets();
@@ -3431,3 +3485,4 @@ public class ProjectService {
         ProjectRecord apply(ProjectRecord project);
     }
 }
+

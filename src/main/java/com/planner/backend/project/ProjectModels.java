@@ -161,13 +161,17 @@ public final class ProjectModels {
             boolean debitaLo,
             int horasPlanejadas,
             BigDecimal custoPlanejado,
-            OffsetDateTime criadoEm) {}
+            OffsetDateTime criadoEm,
+            Boolean draft,
+            Integer mesInicio) {}
 
     public record CreateBudgetAllocationRequest(
             String linhaOrcamentariaId,
             String nomePessoa,
             String perfilId,
-            int horasPlanejadas) {}
+            int horasPlanejadas,
+            Boolean draft,
+            Integer mesInicio) {}
 
     public record CreateFinanceEntryRequest(String tipo, String descricao, BigDecimal valor, OffsetDateTime dataLancamento) {}
 
