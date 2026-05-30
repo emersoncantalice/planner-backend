@@ -393,6 +393,20 @@ public class AuthService {
             valid.add(new UserRecord(u.username(), u.nome(), u.passwordHash(), u.createdAt(), role, status, u.email()));
             firstUser = false;
         }
+        if (valid.isEmpty()) {
+            UserRecord admin = new UserRecord(
+                    "admin",
+                    "Administrador",
+                    passwordEncoder.encode("admin"),
+                    OffsetDateTime.now(),
+                    ROLE_ADMIN,
+                    STATUS_APPROVED,
+                    null
+            );
+            valid.add(admin);
+            saveUsers(valid);
+            log.info("Usuario padrao criado automaticamente (username=admin).");
+        }
         return valid;
     }
 
