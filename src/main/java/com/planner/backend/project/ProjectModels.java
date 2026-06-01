@@ -404,6 +404,8 @@ public final class ProjectModels {
 
     public record UpsertMonthlyHoursRequest(BigDecimal horas) {}
 
+    public record UpsertAllMonthlyHoursEntry(int mes, BigDecimal horas) {}
+
     public record FocalPoint(
             String id,
             String area,

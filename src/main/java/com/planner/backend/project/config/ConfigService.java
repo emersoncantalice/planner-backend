@@ -84,6 +84,20 @@ public class ConfigService {
         return created;
     }
 
+    public List<MonthlyHours> saveAllMonthlyHours(List<UpsertAllMonthlyHoursEntry> items) throws IOException {
+        if (items == null || items.isEmpty()) throw new IllegalArgumentException("Lista de horas nao pode ser vazia.");
+        List<MonthlyHours> toSave = new ArrayList<>();
+        for (UpsertAllMonthlyHoursEntry item : items) {
+            if (item.mes() < 1 || item.mes() > 12) throw new IllegalArgumentException("Mes invalido: " + item.mes());
+            if (item.horas() == null || item.horas().compareTo(BigDecimal.ZERO) <= 0)
+                throw new IllegalArgumentException("Horas invalidas para mes " + item.mes());
+            toSave.add(new MonthlyHours(item.mes(), item.horas(), OffsetDateTime.now()));
+        }
+        toSave.sort(Comparator.comparingInt(MonthlyHours::mes));
+        saveMonthlyHours(toSave);
+        return toSave;
+    }
+
     // ── Feriados ──────────────────────────────────────────────────────────────
 
     public FeriadosConfig getFeriadosConfig() throws IOException {

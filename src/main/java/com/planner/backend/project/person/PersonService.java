@@ -413,6 +413,9 @@ public class PersonService {
         if (!profile.debitaLo()) return profile.valorHora();
         String tipo = request.tipoVinculo().trim().toUpperCase();
         if (tipo.equals("TERCEIRO")) return request.valorHora();
+        // For BV/Folha: prefer explicit valorHora if provided
+        if (request.valorHora() != null && request.valorHora().compareTo(BigDecimal.ZERO) > 0)
+            return request.valorHora();
         if (request.valorMensal() == null || request.valorMensal().compareTo(BigDecimal.ZERO) <= 0)
             return profile.valorHora();
         int mesAtual = LocalDate.now().getMonthValue();
@@ -422,7 +425,7 @@ public class PersonService {
                 .findFirst()
                 .orElse(BigDecimal.valueOf(160));
         if (horasMes.compareTo(BigDecimal.ZERO) <= 0) horasMes = BigDecimal.valueOf(160);
-        return request.valorMensal().divide(horasMes, 2, java.math.RoundingMode.HALF_UP);
+        return request.valorMensal().divide(horasMes, 3, java.math.RoundingMode.HALF_UP);
     }
 
     private BigDecimal resolveValorMensal(CreatePersonRequest request, Profile profile, BigDecimal valorHoraCalculado) {

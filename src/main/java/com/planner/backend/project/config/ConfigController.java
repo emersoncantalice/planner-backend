@@ -34,6 +34,11 @@ public class ConfigController {
         return configService.upsertMonthlyHours(month, request);
     }
 
+    @PutMapping("/monthly-hours")
+    public List<MonthlyHours> saveAllMonthlyHours(@RequestBody List<UpsertAllMonthlyHoursEntry> items) throws IOException {
+        return configService.saveAllMonthlyHours(items);
+    }
+
     // ── Feriados ──────────────────────────────────────────────────────────────
 
     @GetMapping("/feriados")
