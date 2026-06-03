@@ -600,6 +600,12 @@ public final class ProjectModels {
 
     public record UpsertLoRealizadoRequest(java.math.BigDecimal valor) {}
 
+    // ── LO Favorites (per-user, saved to backend) ─────────────────────────────
+    public record LoFavoriteConfig(
+            String loId,
+            String username,
+            java.time.OffsetDateTime criadoEm) {}
+
     public record GanttMarker(String id, String label, String date, String description) {}
     public record GanttItemMeta(String responsavel, int pct) {}
     public record GanttProjectConfig(
@@ -661,4 +667,45 @@ public final class ProjectModels {
             List<FeriadoEntry> feriados,
             java.util.Map<String, FederalOverrideEntry> federalOverrides,
             List<Boolean> diasUteis) {}
+
+    // ── Drawings ──────────────────────────────────────────────────────────────
+    public record DrawingRecord(
+            String id,
+            String nome,
+            String data,           // JSON string with shapes + background
+            String pasta,
+            String criadoPor,
+            OffsetDateTime criadoEm,
+            OffsetDateTime atualizadoEm) {}
+
+    public record CreateDrawingRequest(String nome, String pasta) {}
+    public record UpdateDrawingRequest(String nome, String data, String pasta) {}
+
+    // ── Periods ───────────────────────────────────────────────────────────────
+    public record PeriodRecord(
+            String id,
+            String titulo,
+            String descricao,
+            String tipo,           // DIARIO | SEMANAL | MENSAL | TRIMESTRAL | SEMESTRAL | ANUAL
+            int diaInicio,
+            int diaFim,
+            Integer mesInicio,     // null for MENSAL (1-12)
+            Integer mesFim,        // null for MENSAL (1-12)
+            String cor,
+            String icone,
+            String criadoPor,
+            OffsetDateTime criadoEm) {}
+
+    public record CreatePeriodRequest(
+            String titulo, String descricao, String tipo,
+            int diaInicio, int diaFim,
+            Integer mesInicio, Integer mesFim,
+            String cor, String icone) {}
+
+    public record PeriodCheckRecord(
+            String periodId,
+            String username,
+            int ano,
+            int mes,
+            OffsetDateTime checkedAt) {}
 }

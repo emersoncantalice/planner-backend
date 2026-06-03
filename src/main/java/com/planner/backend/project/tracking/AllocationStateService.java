@@ -24,6 +24,7 @@ public class AllocationStateService {
     private final java.nio.file.Path allocationPercentPath;
     private final java.nio.file.Path loRealizadoPath;
     private final java.nio.file.Path allocationCursorsPath;
+    private final java.nio.file.Path loFavoritosPath;
 
     public AllocationStateService(
             FileJsonStore jsonStore,
@@ -35,6 +36,7 @@ public class AllocationStateService {
         this.allocationPercentPath      = java.nio.file.Path.of(dataDir, "allocation-percent.json");
         this.loRealizadoPath            = java.nio.file.Path.of(dataDir, "lo-realizado.json");
         this.allocationCursorsPath      = java.nio.file.Path.of(dataDir, "allocation-cursors.json");
+        this.loFavoritosPath            = java.nio.file.Path.of(dataDir, "lo-favoritos.json");
         ensureFiles();
     }
 
@@ -46,6 +48,7 @@ public class AllocationStateService {
             ensureFile(allocationPercentPath);
             ensureFile(loRealizadoPath);
             ensureFile(allocationCursorsPath);
+            ensureFile(loFavoritosPath);
         } catch (IOException ex) {
             throw new IllegalStateException("Falha ao inicializar arquivos de tracking.", ex);
         }
@@ -251,6 +254,41 @@ public class AllocationStateService {
         return updated;
     }
 
+    // ── LO Favoritos ─────────────────────────────────────────────────────────
+
+    public List<LoFavoriteConfig> listLoFavoritos() throws IOException {
+        return new ArrayList<>(loadLoFavoritos());
+    }
+
+    public List<LoFavoriteConfig> addLoFavorito(String loId, String username) throws IOException {
+        if (loId == null || loId.isBlank())
+            throw new IllegalArgumentException("loId e obrigatorio.");
+        if (username == null || username.isBlank())
+            throw new IllegalArgumentException("Usuario nao autenticado.");
+        String lo   = loId.trim();
+        String user = username.trim();
+        List<LoFavoriteConfig> all = new ArrayList<>(loadLoFavoritos());
+        boolean exists = all.stream().anyMatch(f -> lo.equals(f.loId()) && user.equalsIgnoreCase(f.username()));
+        if (!exists) {
+            all.add(new LoFavoriteConfig(lo, user, OffsetDateTime.now()));
+            saveLoFavoritos(all);
+        }
+        return all;
+    }
+
+    public List<LoFavoriteConfig> removeLoFavorito(String loId, String username) throws IOException {
+        if (loId == null || loId.isBlank())
+            throw new IllegalArgumentException("loId e obrigatorio.");
+        if (username == null || username.isBlank())
+            throw new IllegalArgumentException("Usuario nao autenticado.");
+        String lo   = loId.trim();
+        String user = username.trim();
+        List<LoFavoriteConfig> all = new ArrayList<>(loadLoFavoritos());
+        all.removeIf(f -> lo.equals(f.loId()) && user.equalsIgnoreCase(f.username()));
+        saveLoFavoritos(all);
+        return all;
+    }
+
     // ── I/O helpers ───────────────────────────────────────────────────────────
 
     private List<AllocationPaymentState> loadAllocationPayments() throws IOException {
@@ -299,5 +337,13 @@ public class AllocationStateService {
 
     private void saveAllocationCursors(List<AllocationCursorState> list) throws IOException {
         jsonStore.writeList(allocationCursorsPath, list);
+    }
+
+    private List<LoFavoriteConfig> loadLoFavoritos() throws IOException {
+        return jsonStore.readList(loFavoritosPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveLoFavoritos(List<LoFavoriteConfig> list) throws IOException {
+        jsonStore.writeList(loFavoritosPath, list);
     }
 }

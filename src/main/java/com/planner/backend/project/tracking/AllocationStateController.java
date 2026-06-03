@@ -107,6 +107,27 @@ public class AllocationStateController {
         return allocationStateService.upsertAllocationCursor(request, username(req));
     }
 
+    // ── LO Favoritos ─────────────────────────────────────────────────────────
+
+    @GetMapping("/lo-favorites")
+    public List<LoFavoriteConfig> listLoFavoritos() throws IOException {
+        return allocationStateService.listLoFavoritos();
+    }
+
+    @PutMapping("/lo-favorites/{loId}")
+    public List<LoFavoriteConfig> addLoFavorito(
+            @PathVariable String loId,
+            HttpServletRequest req) throws IOException {
+        return allocationStateService.addLoFavorito(loId, username(req));
+    }
+
+    @DeleteMapping("/lo-favorites/{loId}")
+    public List<LoFavoriteConfig> removeLoFavorito(
+            @PathVariable String loId,
+            HttpServletRequest req) throws IOException {
+        return allocationStateService.removeLoFavorito(loId, username(req));
+    }
+
     // ── Lo Realizado ──────────────────────────────────────────────────────────
 
     @GetMapping("/lo-realizado")
