@@ -170,11 +170,18 @@ public class HierarchyService {
         List<HierarchyMember> out = new ArrayList<>();
         for (HierarchyMember m : membros) {
             if (m == null || m.nomePessoa() == null || m.nomePessoa().isBlank()) continue;
+            String vinculo = m.vinculo() == null ? null : m.vinculo().trim().toUpperCase();
+            if (vinculo != null && !vinculo.equals("FOLHA") && !vinculo.equals("TERCEIRO")) vinculo = null;
+            Double percentual = m.percentual();
+            if (percentual != null) percentual = Math.max(0d, Math.min(100d, percentual));
             out.add(new HierarchyMember(
                     m.personId() == null ? null : m.personId().trim(),
                     m.nomePessoa().trim(),
                     m.papel() == null ? "" : m.papel().trim(),
-                    Boolean.TRUE.equals(m.cross())));
+                    Boolean.TRUE.equals(m.cross()),
+                    vinculo,
+                    percentual,
+                    m.subgrupo() == null ? null : m.subgrupo().trim()));
         }
         return out;
     }

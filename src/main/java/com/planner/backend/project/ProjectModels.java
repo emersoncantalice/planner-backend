@@ -289,9 +289,10 @@ public final class ProjectModels {
             String vagaUrl,
             String vagaAlias,
             String dataNascimento,   
-            String contato,          
-            Boolean ativo,           
-            java.util.List<VagaHistorico> vagasAnteriores, 
+            String contato,
+            Boolean ativo,
+            java.util.List<VagaHistorico> vagasAnteriores,
+            Boolean contaFte,
             OffsetDateTime criadoEm) {}
 
     public record CreatePersonRequest(
@@ -306,7 +307,8 @@ public final class ProjectModels {
             String dataNascimento,
             String contato,
             boolean ativo,
-            java.util.List<VagaHistorico> vagasAnteriores) {}
+            java.util.List<VagaHistorico> vagasAnteriores,
+            Boolean contaFte) {}
 
     
     public record Absence(
@@ -720,7 +722,10 @@ public final class ProjectModels {
             String personId,
             String nomePessoa,
             String papel,
-            Boolean cross) {}
+            Boolean cross,
+            String vinculo,
+            Double percentual,
+            String subgrupo) {}
 
     public record HierarchyNode(
             String id,

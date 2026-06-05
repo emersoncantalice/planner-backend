@@ -105,6 +105,7 @@ public class PersonService {
                 request.contato() == null ? null : request.contato().trim(),
                 request.ativo(),
                 request.vagasAnteriores() != null ? request.vagasAnteriores() : java.util.List.of(),
+                request.contaFte() == null ? Boolean.TRUE : request.contaFte(),
                 OffsetDateTime.now());
         List<Person> all = new ArrayList<>(loadPeople());
         all.add(created);
@@ -140,6 +141,7 @@ public class PersonService {
                         request.ativo(),
                         request.vagasAnteriores() != null ? request.vagasAnteriores()
                                 : (p.vagasAnteriores() != null ? p.vagasAnteriores() : java.util.List.of()),
+                        request.contaFte() == null ? (p.contaFte() == null ? Boolean.TRUE : p.contaFte()) : request.contaFte(),
                         p.criadoEm());
                 all.set(i, updated);
                 savePeople(all);
@@ -303,7 +305,7 @@ public class PersonService {
             String vagaAlias = cols.length > 7 ? stripQuotes(cols[7]) : null;
             try {
                 createPerson(new CreatePersonRequest(nome, profile.id(), tipoVinculo, consultoria,
-                        valorHora, valorMensal, vagaUrl, vagaAlias, null, null, true, null));
+                        valorHora, valorMensal, vagaUrl, vagaAlias, null, null, true, null, null));
                 criados++;
             } catch (IllegalArgumentException ex) {
                 ignorados++;
@@ -506,6 +508,7 @@ public class PersonService {
                 p.vagaUrl(), p.vagaAlias(), p.dataNascimento(), p.contato(),
                 true,
                 p.vagasAnteriores() != null ? p.vagasAnteriores() : java.util.List.of(),
+                p.contaFte() == null ? Boolean.TRUE : p.contaFte(),
                 p.criadoEm());
     }
 
