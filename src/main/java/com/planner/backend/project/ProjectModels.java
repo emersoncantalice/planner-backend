@@ -717,7 +717,7 @@ public final class ProjectModels {
     public record PersonImageEntry(String personId, String dataUrl) {}
 
     // ── Hierarquia organizacional ──────────────────────────────────────────
-    // tipo: PRESIDENCIA | DIRETORIA | TRIBO | SQUAD
+    // tipo: PRESIDENCIA | VICE_PRESIDENCIA | SUPERINTENDENCIA | GERENCIA | TRIBO | SQUAD
     public record HierarchyMember(
             String personId,
             String nomePessoa,

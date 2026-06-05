@@ -17,7 +17,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class HierarchyService {
 
-    private static final Set<String> TIPOS_VALIDOS = Set.of("PRESIDENCIA", "DIRETORIA", "TRIBO", "SQUAD");
+    private static final Set<String> TIPOS_VALIDOS = Set.of(
+            "PRESIDENCIA", "VICE_PRESIDENCIA", "SUPERINTENDENCIA", "GERENCIA", "DIRETORIA", "TRIBO", "SQUAD");
 
     private final FileJsonStore jsonStore;
     private final java.nio.file.Path hierarchyPath;
@@ -52,9 +53,10 @@ public class HierarchyService {
         if (parentId != null && all.stream().noneMatch(n -> parentId.equals(n.id())))
             throw new IllegalArgumentException("No pai nao encontrado.");
         int ordem = request.ordem() != null ? request.ordem() : nextOrdem(all, parentId);
+        String tipo = normalizeTipo(request.tipo());
         HierarchyNode created = new HierarchyNode(
                 UUID.randomUUID().toString(),
-                request.tipo().trim().toUpperCase(),
+                tipo,
                 request.nome().trim(),
                 request.descricao() == null ? "" : request.descricao().trim(),
                 parentId,
@@ -80,9 +82,10 @@ public class HierarchyService {
         for (int i = 0; i < all.size(); i++) {
             HierarchyNode n = all.get(i);
             if (!nodeId.equals(n.id())) continue;
+            String tipo = normalizeTipo(request.tipo());
             HierarchyNode updated = new HierarchyNode(
                     n.id(),
-                    request.tipo().trim().toUpperCase(),
+                    tipo,
                     request.nome().trim(),
                     request.descricao() == null ? "" : request.descricao().trim(),
                     parentId,
@@ -158,7 +161,12 @@ public class HierarchyService {
         if (request.nome() == null || request.nome().isBlank())
             throw new IllegalArgumentException("Nome do no e obrigatorio.");
         if (request.tipo() == null || !TIPOS_VALIDOS.contains(request.tipo().trim().toUpperCase()))
-            throw new IllegalArgumentException("Tipo deve ser PRESIDENCIA, DIRETORIA, TRIBO ou SQUAD.");
+            throw new IllegalArgumentException("Tipo deve ser PRESIDENCIA, VICE_PRESIDENCIA, SUPERINTENDENCIA, GERENCIA, TRIBO ou SQUAD.");
+    }
+
+    private String normalizeTipo(String tipo) {
+        String normalized = tipo.trim().toUpperCase();
+        return normalized.equals("DIRETORIA") ? "GERENCIA" : normalized;
     }
 
     private String normalizeParent(String parentId) {
