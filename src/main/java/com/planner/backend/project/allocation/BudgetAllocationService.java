@@ -85,7 +85,7 @@ public class BudgetAllocationService {
         if (loDraft && !isDraft)
             throw new IllegalArgumentException("Esta LO e um rascunho. So e possivel adicionar alocacoes do tipo rascunho.");
 
-        if (!isDraft && (request.nomePessoa() == null || request.nomePessoa().isBlank()))
+        if (request.nomePessoa() == null || request.nomePessoa().isBlank())
             throw new IllegalArgumentException("Nome da pessoa e obrigatorio.");
 
         Profile profile = profileService.loadProfiles().stream()
@@ -94,9 +94,7 @@ public class BudgetAllocationService {
                 .orElseThrow(() -> new IllegalArgumentException("Perfil nao encontrado."));
 
         List<BudgetAllocation> existingAll = loadBudgetAllocations();
-        String nomePessoa = (request.nomePessoa() == null || request.nomePessoa().isBlank())
-                ? nextPessoaPlaneadaNome(existingAll, lo.id())
-                : request.nomePessoa().trim();
+        String nomePessoa = request.nomePessoa().trim();
 
         BigDecimal valorHoraAplicado = resolveValorHoraPessoa(nomePessoa, profile);
         BigDecimal custo = valorHoraAplicado.multiply(BigDecimal.valueOf(request.horasPlanejadas()));
@@ -199,14 +197,6 @@ public class BudgetAllocationService {
                 .filter(v -> v != null && v.compareTo(BigDecimal.ZERO) > 0)
                 .findFirst()
                 .orElse(profile.valorHora());
-    }
-
-    private String nextPessoaPlaneadaNome(List<BudgetAllocation> all, String loId) {
-        long count = all.stream()
-                .filter(a -> loId.equals(a.linhaOrcamentariaId()))
-                .filter(a -> a.nomePessoa() != null && a.nomePessoa().startsWith("Pessoa Planejada "))
-                .count();
-        return "Pessoa Planejada " + (count + 1);
     }
 
     private void autoApplyMesInicio(String allocationId, int mesInicio) throws IOException {

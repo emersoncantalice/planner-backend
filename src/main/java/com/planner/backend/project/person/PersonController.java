@@ -50,6 +50,25 @@ public class PersonController {
         return personService.importPeopleCsv(request);
     }
 
+    // ── Fotos das pessoas ───────────────────────────────────────────────────
+
+    @GetMapping("/people/images")
+    public List<PersonImageEntry> listPersonImages() throws IOException {
+        return personService.listPersonImages();
+    }
+
+    @GetMapping("/people/{personId}/image")
+    public PersonImageResponse getPersonImage(@PathVariable String personId) throws IOException {
+        return personService.getPersonImage(personId);
+    }
+
+    @PutMapping("/people/{personId}/image")
+    public PersonImageResponse updatePersonImage(
+            @PathVariable String personId,
+            @RequestBody UpdatePersonImageRequest request) throws IOException {
+        return personService.updatePersonImage(personId, request);
+    }
+
     // ── Absences ──────────────────────────────────────────────────────────────
 
     @GetMapping("/absences")

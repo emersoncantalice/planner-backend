@@ -37,6 +37,8 @@ public class PersonService {
     private final java.nio.file.Path allocationPercentPath;
     private final java.nio.file.Path monthlyHoursPath;
     private final java.nio.file.Path consultanciesPath;
+    private final java.nio.file.Path personImagesDir;
+    private static final int MAX_PERSON_IMAGE_CHARS = 5_000_000;
 
     public PersonService(
             FileJsonStore jsonStore,
@@ -54,6 +56,7 @@ public class PersonService {
         this.allocationPercentPath     = java.nio.file.Path.of(dataDir, "allocation-percent.json");
         this.monthlyHoursPath          = java.nio.file.Path.of(dataDir, "monthly-hours.json");
         this.consultanciesPath         = java.nio.file.Path.of(dataDir, "consultancies.json");
+        this.personImagesDir           = java.nio.file.Path.of(dataDir, "person-images");
         ensureFiles();
     }
 
@@ -210,6 +213,66 @@ public class PersonService {
         List<Absence> absences = new ArrayList<>(loadAbsences());
         boolean absChanged = absences.removeIf(a -> personId.equals(a.pessoaId()));
         if (absChanged) saveAbsences(absences);
+
+        // Remove foto da pessoa
+        deletePersonImage(personId);
+    }
+
+    // ── Foto da pessoa ──────────────────────────────────────────────────────
+
+    public PersonImageResponse getPersonImage(String personId) throws IOException {
+        String dataUrl = readPersonImage(personId);
+        return new PersonImageResponse(dataUrl == null ? "" : dataUrl);
+    }
+
+    public PersonImageResponse updatePersonImage(String personId, UpdatePersonImageRequest request) throws IOException {
+        if (personId == null || personId.isBlank())
+            throw new IllegalArgumentException("ID da pessoa e obrigatorio.");
+        String dataUrl = request == null || request.dataUrl() == null ? "" : request.dataUrl().trim();
+        if (!dataUrl.isBlank()) {
+            if (!dataUrl.startsWith("data:image/")) throw new IllegalArgumentException("Formato de imagem invalido.");
+            if (dataUrl.length() > MAX_PERSON_IMAGE_CHARS) throw new IllegalArgumentException("Imagem muito grande.");
+            writePersonImage(personId, dataUrl);
+            return new PersonImageResponse(dataUrl);
+        }
+        deletePersonImage(personId);
+        return new PersonImageResponse("");
+    }
+
+    public List<PersonImageEntry> listPersonImages() throws IOException {
+        List<PersonImageEntry> entries = new ArrayList<>();
+        if (!Files.exists(personImagesDir)) return entries;
+        try (var stream = Files.list(personImagesDir)) {
+            for (java.nio.file.Path file : stream.toList()) {
+                String name = file.getFileName().toString();
+                if (!name.endsWith(".txt")) continue;
+                String personId = name.substring(0, name.length() - 4);
+                String dataUrl = Files.readString(file, StandardCharsets.UTF_8);
+                if (dataUrl != null && !dataUrl.isBlank()) entries.add(new PersonImageEntry(personId, dataUrl));
+            }
+        }
+        return entries;
+    }
+
+    private java.nio.file.Path personImagePath(String personId) {
+        String safe = personId == null ? "" : personId.trim().toLowerCase().replaceAll("[^a-z0-9._-]", "_");
+        if (safe.isBlank()) safe = "person";
+        return personImagesDir.resolve(safe + ".txt");
+    }
+
+    private String readPersonImage(String personId) throws IOException {
+        java.nio.file.Path path = personImagePath(personId);
+        if (!Files.exists(path)) return "";
+        return Files.readString(path, StandardCharsets.UTF_8);
+    }
+
+    private void writePersonImage(String personId, String dataUrl) throws IOException {
+        Files.createDirectories(personImagesDir);
+        Files.writeString(personImagePath(personId), dataUrl, StandardCharsets.UTF_8);
+    }
+
+    private void deletePersonImage(String personId) throws IOException {
+        Files.deleteIfExists(personImagePath(personId));
     }
 
     public ImportPeopleCsvResponse importPeopleCsv(ImportPeopleCsvRequest request) throws IOException {

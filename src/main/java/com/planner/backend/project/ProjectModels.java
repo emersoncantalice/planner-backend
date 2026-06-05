@@ -708,4 +708,42 @@ public final class ProjectModels {
             int ano,
             int mes,
             OffsetDateTime checkedAt) {}
+
+    // ── Foto da pessoa ─────────────────────────────────────────────────────
+    public record PersonImageResponse(String dataUrl) {}
+    public record UpdatePersonImageRequest(String dataUrl) {}
+    public record PersonImageEntry(String personId, String dataUrl) {}
+
+    // ── Hierarquia organizacional ──────────────────────────────────────────
+    // tipo: PRESIDENCIA | DIRETORIA | TRIBO | SQUAD
+    public record HierarchyMember(
+            String personId,
+            String nomePessoa,
+            String papel,
+            Boolean cross) {}
+
+    public record HierarchyNode(
+            String id,
+            String tipo,
+            String nome,
+            String descricao,
+            String parentId,
+            int ordem,
+            java.util.List<HierarchyMember> membros,
+            java.util.List<String> loIds,
+            OffsetDateTime criadoEm) {}
+
+    public record CreateHierarchyNodeRequest(
+            String tipo,
+            String nome,
+            String descricao,
+            String parentId,
+            Integer ordem,
+            java.util.List<HierarchyMember> membros,
+            java.util.List<String> loIds) {}
+
+    public record MoveHierarchyMemberRequest(
+            String fromNodeId,
+            String toNodeId,
+            String nomePessoa) {}
 }
