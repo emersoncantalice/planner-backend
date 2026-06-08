@@ -7,8 +7,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.OffsetDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,19 +54,19 @@ public class HierarchyService {
     public HierarchyNode createNode(CreateHierarchyNodeRequest request) throws IOException {
         validate(request);
         List<HierarchyNode> all = new ArrayList<>(loadNodes());
-        String parentId = normalizeParent(request.parentId());
-        if (parentId != null && all.stream().noneMatch(n -> parentId.equals(n.id())))
-            throw new IllegalArgumentException("No pai nao encontrado.");
-        int ordem = request.ordem() != null ? request.ordem() : nextOrdem(all, parentId);
+        List<String> parents = normalizeParents(request);
+        validarPaisExistem(all, parents, null);
+        int ordem = request.ordem() != null ? request.ordem() : nextOrdem(all, parents);
         String tipo = normalizeTipo(request.tipo());
         HierarchyNode created = new HierarchyNode(
                 UUID.randomUUID().toString(),
                 tipo,
                 request.nome().trim(),
                 request.descricao() == null ? "" : request.descricao().trim(),
-                parentId,
+                parents.isEmpty() ? null : parents.get(0),
+                parents,
                 ordem,
-                sanitizeMembros(request.membros()),
+                sanitizeMembros(request.membros(), tipo),
                 sanitizeLoIds(request.loIds()),
                 OffsetDateTime.now());
         all.add(created);
@@ -72,12 +77,11 @@ public class HierarchyService {
     public HierarchyNode updateNode(String nodeId, CreateHierarchyNodeRequest request) throws IOException {
         validate(request);
         List<HierarchyNode> all = new ArrayList<>(loadNodes());
-        String parentId = normalizeParent(request.parentId());
-        if (parentId != null && parentId.equals(nodeId))
+        List<String> parents = normalizeParents(request);
+        if (parents.contains(nodeId))
             throw new IllegalArgumentException("Um no nao pode ser pai de si mesmo.");
-        if (parentId != null && all.stream().noneMatch(n -> parentId.equals(n.id())))
-            throw new IllegalArgumentException("No pai nao encontrado.");
-        if (parentId != null && createsCycle(all, nodeId, parentId))
+        validarPaisExistem(all, parents, nodeId);
+        if (createsCycle(all, nodeId, parents))
             throw new IllegalArgumentException("Hierarquia invalida: ciclo detectado.");
         for (int i = 0; i < all.size(); i++) {
             HierarchyNode n = all.get(i);
@@ -88,9 +92,10 @@ public class HierarchyService {
                     tipo,
                     request.nome().trim(),
                     request.descricao() == null ? "" : request.descricao().trim(),
-                    parentId,
+                    parents.isEmpty() ? null : parents.get(0),
+                    parents,
                     request.ordem() != null ? request.ordem() : n.ordem(),
-                    sanitizeMembros(request.membros()),
+                    sanitizeMembros(request.membros(), tipo),
                     sanitizeLoIds(request.loIds()),
                     n.criadoEm());
             all.set(i, updated);
@@ -123,7 +128,7 @@ public class HierarchyService {
         HierarchyNode to = all.get(toIdx);
         List<HierarchyMember> toMembros = new ArrayList<>(to.membros() == null ? List.of() : to.membros());
         boolean jaExiste = toMembros.stream().anyMatch(m -> norm(m.nomePessoa()).equals(alvo));
-        if (!jaExiste) toMembros.add(movido);
+        if (!jaExiste) toMembros.add(sanitizeMembro(movido, tipoPermiteMarcacoesDeTime(to.tipo())));
 
         all.set(fromIdx, withMembros(from, fromMembros));
         all.set(toIdx, withMembros(to, toMembros));
@@ -137,21 +142,54 @@ public class HierarchyService {
     }
 
     private HierarchyNode withMembros(HierarchyNode n, List<HierarchyMember> membros) {
-        return new HierarchyNode(n.id(), n.tipo(), n.nome(), n.descricao(), n.parentId(), n.ordem(),
+        return new HierarchyNode(n.id(), n.tipo(), n.nome(), n.descricao(), n.parentId(), parentsOf(n), n.ordem(),
                 membros, n.loIds(), n.criadoEm());
+    }
+
+    private HierarchyNode withParents(HierarchyNode n, List<String> parents) {
+        return new HierarchyNode(n.id(), n.tipo(), n.nome(), n.descricao(),
+                parents.isEmpty() ? null : parents.get(0), parents, n.ordem(),
+                n.membros(), n.loIds(), n.criadoEm());
     }
 
     private String norm(String value) {
         return value == null ? "" : value.trim().toLowerCase();
     }
 
+    /**
+     * Exclui a estrutura. Para cada filho, remove apenas o vinculo com a estrutura excluida;
+     * o filho so e apagado se ficar sem nenhum pai (orfao), e nesse caso o efeito cascateia.
+     */
     public void deleteNode(String nodeId) throws IOException {
         List<HierarchyNode> all = new ArrayList<>(loadNodes());
-        // Remove o no e, em cascata, todos os descendentes.
-        Set<String> toRemove = collectSubtree(all, nodeId);
-        boolean removed = all.removeIf(n -> n != null && toRemove.contains(n.id()));
-        if (!removed) throw new IllegalArgumentException("No de hierarquia nao encontrado.");
-        saveNodes(all);
+        if (all.stream().noneMatch(n -> n != null && nodeId.equals(n.id())))
+            throw new IllegalArgumentException("No de hierarquia nao encontrado.");
+
+        // Mapa mutavel id -> pais efetivos.
+        Map<String, List<String>> parents = new LinkedHashMap<>();
+        for (HierarchyNode n : all) parents.put(n.id(), new ArrayList<>(parentsOf(n)));
+
+        Set<String> removed = new HashSet<>();
+        Deque<String> fila = new ArrayDeque<>();
+        fila.add(nodeId);
+        while (!fila.isEmpty()) {
+            String cur = fila.poll();
+            if (!removed.add(cur)) continue;
+            for (Map.Entry<String, List<String>> e : parents.entrySet()) {
+                if (removed.contains(e.getKey())) continue;
+                List<String> plist = e.getValue();
+                if (plist.remove(cur) && plist.isEmpty()) {
+                    fila.add(e.getKey()); // ficou orfao por causa da exclusao -> remove tambem
+                }
+            }
+        }
+
+        List<HierarchyNode> result = new ArrayList<>();
+        for (HierarchyNode n : all) {
+            if (removed.contains(n.id())) continue;
+            result.add(withParents(n, parents.get(n.id())));
+        }
+        saveNodes(result);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -161,37 +199,77 @@ public class HierarchyService {
         if (request.nome() == null || request.nome().isBlank())
             throw new IllegalArgumentException("Nome do no e obrigatorio.");
         if (request.tipo() == null || !TIPOS_VALIDOS.contains(request.tipo().trim().toUpperCase()))
-            throw new IllegalArgumentException("Tipo deve ser PRESIDENCIA, VICE_PRESIDENCIA, SUPERINTENDENCIA, GERENCIA, TRIBO ou SQUAD.");
+            throw new IllegalArgumentException("Tipo deve ser PRESIDENCIA, VICE_PRESIDENCIA, SUPERINTENDENCIA, DIRETORIA, GERENCIA, TRIBO ou SQUAD.");
     }
 
     private String normalizeTipo(String tipo) {
-        String normalized = tipo.trim().toUpperCase();
-        return normalized.equals("DIRETORIA") ? "GERENCIA" : normalized;
+        return tipo.trim().toUpperCase();
     }
 
-    private String normalizeParent(String parentId) {
-        return parentId == null || parentId.isBlank() ? null : parentId.trim();
-    }
-
-    private List<HierarchyMember> sanitizeMembros(List<HierarchyMember> membros) {
-        if (membros == null) return List.of();
-        List<HierarchyMember> out = new ArrayList<>();
-        for (HierarchyMember m : membros) {
-            if (m == null || m.nomePessoa() == null || m.nomePessoa().isBlank()) continue;
-            String vinculo = m.vinculo() == null ? null : m.vinculo().trim().toUpperCase();
-            if (vinculo != null && !vinculo.equals("FOLHA") && !vinculo.equals("TERCEIRO")) vinculo = null;
-            Double percentual = m.percentual();
-            if (percentual != null) percentual = Math.max(0d, Math.min(100d, percentual));
-            out.add(new HierarchyMember(
-                    m.personId() == null ? null : m.personId().trim(),
-                    m.nomePessoa().trim(),
-                    m.papel() == null ? "" : m.papel().trim(),
-                    Boolean.TRUE.equals(m.cross()),
-                    vinculo,
-                    percentual,
-                    m.subgrupo() == null ? null : m.subgrupo().trim()));
+    /** Pais efetivos de um no: parentIds quando presente; senao cai no parentId legado. */
+    private List<String> parentsOf(HierarchyNode n) {
+        List<String> out = new ArrayList<>();
+        if (n.parentIds() != null) {
+            for (String p : n.parentIds()) {
+                if (p != null && !p.isBlank() && !out.contains(p.trim())) out.add(p.trim());
+            }
+        }
+        if (out.isEmpty() && n.parentId() != null && !n.parentId().isBlank()) {
+            out.add(n.parentId().trim());
         }
         return out;
+    }
+
+    /** Pais informados na requisicao (parentIds preferencial + parentId legado), deduplicados. */
+    private List<String> normalizeParents(CreateHierarchyNodeRequest request) {
+        List<String> out = new ArrayList<>();
+        if (request.parentIds() != null) {
+            for (String p : request.parentIds()) {
+                if (p != null && !p.isBlank() && !out.contains(p.trim())) out.add(p.trim());
+            }
+        }
+        if (request.parentId() != null && !request.parentId().isBlank() && !out.contains(request.parentId().trim())) {
+            out.add(request.parentId().trim());
+        }
+        return out;
+    }
+
+    private void validarPaisExistem(List<HierarchyNode> all, List<String> parents, String ignoreId) {
+        for (String p : parents) {
+            boolean existe = all.stream().anyMatch(n -> p.equals(n.id()) && !p.equals(ignoreId));
+            if (!existe) throw new IllegalArgumentException("No pai nao encontrado.");
+        }
+    }
+
+    private boolean tipoPermiteMarcacoesDeTime(String tipo) {
+        String normalized = tipo == null ? "" : tipo.trim().toUpperCase();
+        return normalized.equals("TRIBO") || normalized.equals("SQUAD");
+    }
+
+    private List<HierarchyMember> sanitizeMembros(List<HierarchyMember> membros, String tipo) {
+        if (membros == null) return List.of();
+        List<HierarchyMember> out = new ArrayList<>();
+        boolean permiteMarcacoes = tipoPermiteMarcacoesDeTime(tipo);
+        for (HierarchyMember m : membros) {
+            if (m == null || m.nomePessoa() == null || m.nomePessoa().isBlank()) continue;
+            out.add(sanitizeMembro(m, permiteMarcacoes));
+        }
+        return out;
+    }
+
+    private HierarchyMember sanitizeMembro(HierarchyMember m, boolean permiteMarcacoes) {
+        String vinculo = m.vinculo() == null ? null : m.vinculo().trim().toUpperCase();
+        if (vinculo != null && !vinculo.equals("FOLHA") && !vinculo.equals("TERCEIRO")) vinculo = null;
+        Double percentual = permiteMarcacoes ? m.percentual() : null;
+        if (percentual != null) percentual = Math.max(0d, Math.min(100d, percentual));
+        return new HierarchyMember(
+                m.personId() == null ? null : m.personId().trim(),
+                m.nomePessoa().trim(),
+                m.papel() == null ? "" : m.papel().trim(),
+                Boolean.TRUE.equals(m.cross()),
+                vinculo,
+                percentual,
+                m.subgrupo() == null ? null : m.subgrupo().trim());
     }
 
     private List<String> sanitizeLoIds(List<String> loIds) {
@@ -205,41 +283,33 @@ public class HierarchyService {
         return out;
     }
 
-    private int nextOrdem(List<HierarchyNode> all, String parentId) {
+    private int nextOrdem(List<HierarchyNode> all, List<String> parents) {
+        String ref = parents.isEmpty() ? null : parents.get(0);
         return (int) all.stream()
-                .filter(n -> java.util.Objects.equals(n.parentId(), parentId))
+                .filter(n -> ref == null ? parentsOf(n).isEmpty() : parentsOf(n).contains(ref))
                 .count();
     }
 
-    private boolean createsCycle(List<HierarchyNode> all, String nodeId, String parentId) {
-        String cursor = parentId;
-        int guard = 0;
-        while (cursor != null && guard++ < all.size() + 1) {
-            if (cursor.equals(nodeId)) return true;
-            cursor = parentIdOf(all, cursor);
+    /** Em grafo (multi-pai), ha ciclo se algum pai novo for o proprio no ou um descendente dele. */
+    private boolean createsCycle(List<HierarchyNode> all, String nodeId, List<String> newParents) {
+        Set<String> descendentes = collectDescendants(all, nodeId);
+        for (String p : newParents) {
+            if (descendentes.contains(p)) return true;
         }
         return false;
     }
 
-    private String parentIdOf(List<HierarchyNode> all, String nodeId) {
-        for (HierarchyNode node : all) {
-            if (node != null && node.id() != null && node.id().equals(nodeId)) {
-                return node.parentId();
-            }
-        }
-        return null;
-    }
-
-    private Set<String> collectSubtree(List<HierarchyNode> all, String rootId) {
-        Set<String> result = new java.util.HashSet<>();
+    /** Conjunto de descendentes de rootId (inclui rootId), seguindo os vinculos de pai para baixo. */
+    private Set<String> collectDescendants(List<HierarchyNode> all, String rootId) {
+        Set<String> result = new HashSet<>();
         result.add(rootId);
         boolean changed = true;
         while (changed) {
             changed = false;
             for (HierarchyNode n : all) {
-                if (n.parentId() != null && result.contains(n.parentId()) && !result.contains(n.id())) {
-                    result.add(n.id());
-                    changed = true;
+                if (result.contains(n.id())) continue;
+                for (String p : parentsOf(n)) {
+                    if (result.contains(p)) { result.add(n.id()); changed = true; break; }
                 }
             }
         }

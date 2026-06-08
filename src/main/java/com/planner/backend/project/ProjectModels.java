@@ -717,7 +717,7 @@ public final class ProjectModels {
     public record PersonImageEntry(String personId, String dataUrl) {}
 
     // ── Hierarquia organizacional ──────────────────────────────────────────
-    // tipo: PRESIDENCIA | VICE_PRESIDENCIA | SUPERINTENDENCIA | GERENCIA | TRIBO | SQUAD
+    // tipo: PRESIDENCIA | VICE_PRESIDENCIA | SUPERINTENDENCIA | DIRETORIA | GERENCIA | TRIBO | SQUAD
     public record HierarchyMember(
             String personId,
             String nomePessoa,
@@ -732,7 +732,8 @@ public final class ProjectModels {
             String tipo,
             String nome,
             String descricao,
-            String parentId,
+            String parentId,                       // legado: espelha o primeiro pai (compatibilidade)
+            java.util.List<String> parentIds,      // pais (uma estrutura pode ligar-se a varias)
             int ordem,
             java.util.List<HierarchyMember> membros,
             java.util.List<String> loIds,
@@ -742,7 +743,8 @@ public final class ProjectModels {
             String tipo,
             String nome,
             String descricao,
-            String parentId,
+            String parentId,                       // legado (pai unico)
+            java.util.List<String> parentIds,      // preferencial (multiplos pais)
             Integer ordem,
             java.util.List<HierarchyMember> membros,
             java.util.List<String> loIds) {}
