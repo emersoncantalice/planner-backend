@@ -737,6 +737,8 @@ public final class ProjectModels {
             int ordem,
             java.util.List<HierarchyMember> membros,
             java.util.List<String> loIds,
+            java.util.List<String> projetoIds,     // projetos vinculados (tribos/squads)
+            java.util.List<String> projetosOcultos,// projetos vinculados porem ocultos neste time
             OffsetDateTime criadoEm) {}
 
     public record CreateHierarchyNodeRequest(
@@ -747,7 +749,9 @@ public final class ProjectModels {
             java.util.List<String> parentIds,      // preferencial (multiplos pais)
             Integer ordem,
             java.util.List<HierarchyMember> membros,
-            java.util.List<String> loIds) {}
+            java.util.List<String> loIds,
+            java.util.List<String> projetoIds,
+            java.util.List<String> projetosOcultos) {}
 
     public record MoveHierarchyMemberRequest(
             String fromNodeId,

@@ -68,6 +68,8 @@ public class HierarchyService {
                 ordem,
                 sanitizeMembros(request.membros(), tipo),
                 sanitizeLoIds(request.loIds()),
+                sanitizeProjetoIds(request.projetoIds()),
+                sanitizeProjetoIds(request.projetosOcultos()),
                 OffsetDateTime.now());
         all.add(created);
         saveNodes(all);
@@ -97,6 +99,8 @@ public class HierarchyService {
                     request.ordem() != null ? request.ordem() : n.ordem(),
                     sanitizeMembros(request.membros(), tipo),
                     sanitizeLoIds(request.loIds()),
+                    sanitizeProjetoIds(request.projetoIds()),
+                    sanitizeProjetoIds(request.projetosOcultos()),
                     n.criadoEm());
             all.set(i, updated);
             saveNodes(all);
@@ -143,13 +147,13 @@ public class HierarchyService {
 
     private HierarchyNode withMembros(HierarchyNode n, List<HierarchyMember> membros) {
         return new HierarchyNode(n.id(), n.tipo(), n.nome(), n.descricao(), n.parentId(), parentsOf(n), n.ordem(),
-                membros, n.loIds(), n.criadoEm());
+                membros, n.loIds(), n.projetoIds(), n.projetosOcultos(), n.criadoEm());
     }
 
     private HierarchyNode withParents(HierarchyNode n, List<String> parents) {
         return new HierarchyNode(n.id(), n.tipo(), n.nome(), n.descricao(),
                 parents.isEmpty() ? null : parents.get(0), parents, n.ordem(),
-                n.membros(), n.loIds(), n.criadoEm());
+                n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(), n.criadoEm());
     }
 
     private String norm(String value) {
@@ -276,6 +280,17 @@ public class HierarchyService {
         if (loIds == null) return List.of();
         List<String> out = new ArrayList<>();
         for (String id : loIds) {
+            if (id == null || id.isBlank()) continue;
+            String trimmed = id.trim();
+            if (!out.contains(trimmed)) out.add(trimmed);
+        }
+        return out;
+    }
+
+    private List<String> sanitizeProjetoIds(List<String> projetoIds) {
+        if (projetoIds == null) return List.of();
+        List<String> out = new ArrayList<>();
+        for (String id : projetoIds) {
             if (id == null || id.isBlank()) continue;
             String trimmed = id.trim();
             if (!out.contains(trimmed)) out.add(trimmed);
