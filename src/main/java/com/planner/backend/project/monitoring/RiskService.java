@@ -207,7 +207,7 @@ public class RiskService {
                 String planoAcao  = cols.length > 2 ? stripQuotes(cols[2]) : "";
                 String statusRaw  = cols.length > 3 ? stripQuotes(cols[3]).toUpperCase(Locale.ROOT) : "PLANO_ACAO";
                 String dataFimRaw = cols.length > 4 ? stripQuotes(cols[4]) : "";
-                List<String> validStatuses = List.of("PLANO_ACAO", "DESENVOLVIMENTO", "ENTREGA", "CONCLUIDO");
+                List<String> validStatuses = List.of("PLANO_ACAO", "DESENVOLVIMENTO", "VALIDACAO_EXTERNA", "ENTREGA", "CONCLUIDO");
                 String status = validStatuses.contains(statusRaw) ? statusRaw : "PLANO_ACAO";
                 OffsetDateTime dataFim;
                 if (dataFimRaw.isBlank()) {
@@ -244,6 +244,7 @@ public class RiskService {
 
     private void validateRiskStatus(String status) {
         if (!status.equals("PLANO_ACAO") && !status.equals("DESENVOLVIMENTO")
+                && !status.equals("VALIDACAO_EXTERNA")
                 && !status.equals("ENTREGA") && !status.equals("CONCLUIDO"))
             throw new IllegalArgumentException("Status invalido para risco.");
     }

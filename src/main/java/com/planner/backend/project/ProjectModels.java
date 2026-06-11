@@ -171,7 +171,8 @@ public final class ProjectModels {
             String perfilId,
             int horasPlanejadas,
             Boolean draft,
-            Integer mesInicio) {}
+            Integer mesInicio,
+            BigDecimal valorHora) {}
 
     public record CreateFinanceEntryRequest(String tipo, String descricao, BigDecimal valor, OffsetDateTime dataLancamento) {}
 

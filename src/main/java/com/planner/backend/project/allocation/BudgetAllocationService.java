@@ -96,7 +96,10 @@ public class BudgetAllocationService {
         List<BudgetAllocation> existingAll = loadBudgetAllocations();
         String nomePessoa = request.nomePessoa().trim();
 
-        BigDecimal valorHoraAplicado = resolveValorHoraPessoa(nomePessoa, profile);
+        // Alocações rascunho permitem informar o valor/hora manualmente na linha.
+        BigDecimal valorHoraAplicado = (isDraft && request.valorHora() != null && request.valorHora().compareTo(BigDecimal.ZERO) >= 0)
+                ? request.valorHora()
+                : resolveValorHoraPessoa(nomePessoa, profile);
         BigDecimal custo = valorHoraAplicado.multiply(BigDecimal.valueOf(request.horasPlanejadas()));
         int mesInicio = request.mesInicio() != null ? Math.max(0, Math.min(11, request.mesInicio())) : 0;
 
@@ -150,7 +153,10 @@ public class BudgetAllocationService {
             BudgetAllocation a = all.get(i);
             if (!a.id().equals(allocationId)) continue;
 
-            BigDecimal valorHoraAplicado = resolveValorHoraPessoa(request.nomePessoa(), profile);
+            // Alocações rascunho permitem informar o valor/hora manualmente na linha.
+            BigDecimal valorHoraAplicado = (isDraft && request.valorHora() != null && request.valorHora().compareTo(BigDecimal.ZERO) >= 0)
+                    ? request.valorHora()
+                    : resolveValorHoraPessoa(request.nomePessoa(), profile);
             BigDecimal custo = valorHoraAplicado.multiply(BigDecimal.valueOf(request.horasPlanejadas()));
             int mesInicio = request.mesInicio() != null ? Math.max(0, Math.min(11, request.mesInicio())) : 0;
 

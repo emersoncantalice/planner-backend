@@ -476,6 +476,7 @@ public class ProjectService {
             throw new IllegalArgumentException("Status do risco e obrigatorio.");
         String nextStatus = request.status().trim().toUpperCase();
         if (!nextStatus.equals("PLANO_ACAO") && !nextStatus.equals("DESENVOLVIMENTO")
+                && !nextStatus.equals("VALIDACAO_EXTERNA")
                 && !nextStatus.equals("ENTREGA") && !nextStatus.equals("CONCLUIDO"))
             throw new IllegalArgumentException("Status invalido para risco.");
         return update(projectId, p -> {
