@@ -105,6 +105,49 @@ public class ProjectService {
         return create(request, null);
     }
 
+    /** Copia um projeto por completo (etapas, cronograma, alocações, financeiro, riscos e config do gantt). */
+    public ProjectRecord duplicate(String projectId, String donoProjeto) throws IOException {
+        ProjectRecord src = getById(projectId);
+        String novoId = UUID.randomUUID().toString();
+        String novoNome = ("Cópia de " + (src.nome() == null ? "" : src.nome())).trim();
+        // Records imutáveis: copiar a lista (compartilhar elementos imutáveis) é seguro.
+        ProjectRecord copy = new ProjectRecord(
+                novoId,
+                novoNome,
+                src.descricao(),
+                OffsetDateTime.now(),
+                new ArrayList<>(src.etapas() == null ? List.of() : src.etapas()),
+                new ArrayList<>(src.cronograma() == null ? List.of() : src.cronograma()),
+                new ArrayList<>(src.alocacoes() == null ? List.of() : src.alocacoes()),
+                new ArrayList<>(src.financeiro() == null ? List.of() : src.financeiro()),
+                new ArrayList<>(src.riscos() == null ? List.of() : src.riscos()),
+                new ArrayList<>(), // histórico de replanejamento começa limpo na cópia
+                "DRAFT",
+                donoProjeto);
+        List<ProjectRecord> all = new ArrayList<>(load());
+        all.add(copy);
+        save(all);
+
+        // Copia também a configuração do gantt (marcadores, alturas) para o novo projeto.
+        try {
+            GanttProjectConfig srcCfg = getGanttConfig(projectId);
+            if (srcCfg != null) {
+                boolean temConfig = (srcCfg.markers() != null && !srcCfg.markers().isEmpty())
+                        || (srcCfg.meta() != null && !srcCfg.meta().isEmpty())
+                        || srcCfg.rowHeight() != null
+                        || (srcCfg.rowHeights() != null && !srcCfg.rowHeights().isEmpty());
+                if (temConfig) {
+                    List<GanttProjectConfig> cfgs = new ArrayList<>(loadGanttConfigs());
+                    cfgs.add(new GanttProjectConfig(novoId, srcCfg.markers(), srcCfg.meta(), srcCfg.rowHeight(), srcCfg.rowHeights()));
+                    saveGanttConfigs(cfgs);
+                }
+            }
+        } catch (Exception ignore) { /* config do gantt é opcional */ }
+
+        log.info("Projeto duplicado: origem={} novo={} dono={}", projectId, novoId, donoProjeto);
+        return copy;
+    }
+
     public ProjectRecord updateSituacao(String projectId, String situacao, String username, String role) throws IOException {
         if (!"DRAFT".equals(situacao) && !"PUBLISHED".equals(situacao))
             throw new IllegalArgumentException("Situacao invalida. Use DRAFT ou PUBLISHED.");

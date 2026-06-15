@@ -54,6 +54,13 @@ public class ProjectController {
         return projectService.getById(projectId);
     }
 
+    @PostMapping("/projects/{projectId}/duplicate")
+    public ProjectRecord duplicateProject(@PathVariable String projectId,
+                                          HttpServletRequest req) throws IOException {
+        log.info("POST /api/projects/{}/duplicate user={}", projectId, username(req));
+        return projectService.duplicate(projectId, username(req));
+    }
+
     @PutMapping("/projects/{projectId}")
     public ProjectRecord updateProject(@PathVariable String projectId,
                                        @RequestBody CreateProjectRequest request) throws IOException {
