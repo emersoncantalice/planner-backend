@@ -88,6 +88,10 @@ public final class ProjectModels {
     public record CreateProjectRequest(String nome, String descricao) {}
     public record UpdateProjectSituacaoRequest(String situacao) {}
 
+    // ── Imagem de capa do projeto (data URL) ────────────────────────────────────
+    public record ProjectCover(String projectId, String imagem, OffsetDateTime updatedAt, String updatedBy) {}
+    public record UpsertProjectCoverRequest(String imagem) {}
+
     public record CreateStepRequest(String titulo) {}
 
     public record ToggleStepRequest(boolean concluido) {}
@@ -592,6 +596,15 @@ public final class ProjectModels {
             String updatedBy) {}
 
     public record UpsertAllocationPercentRequest(java.math.BigDecimal percentual) {}
+
+    // ── Anotação por alocação (visível na linha da pessoa) ──────────────────────
+    public record AllocationNoteConfig(
+            String allocationId,
+            String nota,
+            OffsetDateTime updatedAt,
+            String updatedBy) {}
+
+    public record UpsertAllocationNoteRequest(String nota) {}
 
     // ── LO Realizado (realized monthly value per LO, saved to backend) ───────────────────
     public record LoRealizadoConfig(

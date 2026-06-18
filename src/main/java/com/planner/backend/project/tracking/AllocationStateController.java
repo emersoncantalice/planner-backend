@@ -93,6 +93,22 @@ public class AllocationStateController {
         return allocationStateService.upsertAllocationPercent(allocationId, pct, username(req));
     }
 
+    // ── Allocation Notes (anotação por alocação) ───────────────────────────────
+
+    @GetMapping("/allocation-notes")
+    public List<AllocationNoteConfig> listAllocationNotes() throws IOException {
+        return allocationStateService.listAllocationNotes();
+    }
+
+    @PutMapping("/allocation-notes/{allocationId}")
+    public AllocationNoteConfig upsertAllocationNote(
+            @PathVariable String allocationId,
+            @RequestBody UpsertAllocationNoteRequest request,
+            HttpServletRequest req) throws IOException {
+        String nota = request != null ? request.nota() : null;
+        return allocationStateService.upsertAllocationNote(allocationId, nota, username(req));
+    }
+
     // ── Allocation Cursors ────────────────────────────────────────────────────
 
     @GetMapping("/allocation-cursors")

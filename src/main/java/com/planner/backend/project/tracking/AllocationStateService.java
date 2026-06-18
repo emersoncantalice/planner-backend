@@ -25,6 +25,7 @@ public class AllocationStateService {
     private final java.nio.file.Path loRealizadoPath;
     private final java.nio.file.Path allocationCursorsPath;
     private final java.nio.file.Path loFavoritosPath;
+    private final java.nio.file.Path allocationNotesPath;
 
     public AllocationStateService(
             FileJsonStore jsonStore,
@@ -37,6 +38,7 @@ public class AllocationStateService {
         this.loRealizadoPath            = java.nio.file.Path.of(dataDir, "lo-realizado.json");
         this.allocationCursorsPath      = java.nio.file.Path.of(dataDir, "allocation-cursors.json");
         this.loFavoritosPath            = java.nio.file.Path.of(dataDir, "lo-favoritos.json");
+        this.allocationNotesPath        = java.nio.file.Path.of(dataDir, "allocation-notes.json");
         ensureFiles();
     }
 
@@ -49,6 +51,7 @@ public class AllocationStateService {
             ensureFile(loRealizadoPath);
             ensureFile(allocationCursorsPath);
             ensureFile(loFavoritosPath);
+            ensureFile(allocationNotesPath);
         } catch (IOException ex) {
             throw new IllegalStateException("Falha ao inicializar arquivos de tracking.", ex);
         }
@@ -189,6 +192,28 @@ public class AllocationStateService {
         return updated;
     }
 
+    // ── Allocation Notes (anotação por alocação) ───────────────────────────────
+
+    public List<AllocationNoteConfig> listAllocationNotes() throws IOException {
+        List<AllocationNoteConfig> all = new ArrayList<>(loadAllocationNotes());
+        all.sort(Comparator.comparing(AllocationNoteConfig::allocationId, Comparator.nullsLast(String::compareTo)));
+        return all;
+    }
+
+    public AllocationNoteConfig upsertAllocationNote(String allocationId, String nota, String user) throws IOException {
+        if (allocationId == null || allocationId.isBlank())
+            throw new IllegalArgumentException("allocationId e obrigatorio.");
+        String texto = nota == null ? "" : nota.trim();
+        List<AllocationNoteConfig> all = new ArrayList<>(loadAllocationNotes());
+        all.removeIf(n -> allocationId.trim().equals(n.allocationId()));
+        AllocationNoteConfig updated = texto.isEmpty()
+                ? null
+                : new AllocationNoteConfig(allocationId.trim(), texto, OffsetDateTime.now(), user == null ? "" : user);
+        if (updated != null) all.add(updated);
+        saveAllocationNotes(all);
+        return updated != null ? updated : new AllocationNoteConfig(allocationId.trim(), "", OffsetDateTime.now(), user == null ? "" : user);
+    }
+
     // ── Allocation Cursors ────────────────────────────────────────────────────
 
     public List<AllocationCursorState> listAllocationCursors(String loId) throws IOException {
@@ -321,6 +346,14 @@ public class AllocationStateService {
 
     private void saveAllocationPercents(List<AllocationPercentConfig> list) throws IOException {
         jsonStore.writeList(allocationPercentPath, list);
+    }
+
+    private List<AllocationNoteConfig> loadAllocationNotes() throws IOException {
+        return jsonStore.readList(allocationNotesPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveAllocationNotes(List<AllocationNoteConfig> list) throws IOException {
+        jsonStore.writeList(allocationNotesPath, list);
     }
 
     private List<LoRealizadoConfig> loadLoRealizado() throws IOException {

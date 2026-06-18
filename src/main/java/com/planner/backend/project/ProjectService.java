@@ -27,6 +27,7 @@ public class ProjectService {
     private final ProjectStorePort projectStorePort;
     private final java.nio.file.Path ganttConfigsPath;
     private final java.nio.file.Path projectBudgetsPath;
+    private final java.nio.file.Path projectCoversPath;
     private final com.planner.backend.auth.FileJsonStore jsonStore;
     private final ProfileService profileService;
     private final RiskService riskService;
@@ -55,6 +56,7 @@ public class ProjectService {
         this.budgetLineService = budgetLineService;
         this.ganttConfigsPath   = java.nio.file.Path.of(dataDir, "gantt-configs.json");
         this.projectBudgetsPath = java.nio.file.Path.of(dataDir, "project-budgets.json");
+        this.projectCoversPath  = java.nio.file.Path.of(dataDir, "project-covers.json");
         ensureDataFiles();
     }
 
@@ -176,6 +178,7 @@ public class ProjectService {
         boolean removed = all.removeIf(p -> p.id().equals(projectId));
         if (!removed) throw new IllegalArgumentException("Projeto nao encontrado.");
         save(all);
+        removeProjectCover(projectId);
     }
 
     public ProjectRecord transferProjectDono(String projectId, String novoDono, String username, String role) throws IOException {
@@ -582,8 +585,9 @@ public class ProjectService {
                         .sum();
                 percentualConclusao = (int) Math.round(sum / cronograma.size());
             }
-            String status = percentualConclusao >= 100 ? "CONCLUIDO"
+            String statusAuto = percentualConclusao >= 100 ? "CONCLUIDO"
                     : (percentualConclusao >= 50 ? "EM_ANDAMENTO" : "PLANEJADO");
+            String status = manualProjectStatus(p.descricao(), statusAuto);
             BigDecimal custoEquipe = p.alocacoes().stream()
                     .map(Allocation::custoPlanejado).reduce(BigDecimal.ZERO, BigDecimal::add);
             BigDecimal receitas = totalByType(p.financeiro(), "RECEITA");
@@ -597,6 +601,14 @@ public class ProjectService {
     }
 
     // ── Gantt Configs ─────────────────────────────────────────────────────────
+
+    private String manualProjectStatus(String descricao, String fallback) {
+        if (descricao == null || descricao.isBlank()) return fallback;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?m)^-\\s*Status do projeto:\\s*(PLANEJADO|EM_ANDAMENTO|CONCLUIDO)\\s*$")
+                .matcher(descricao);
+        return matcher.find() ? matcher.group(1) : fallback;
+    }
 
     public GanttProjectConfig getGanttConfig(String projectId) throws IOException {
         return loadGanttConfigs().stream()
@@ -685,6 +697,39 @@ public class ProjectService {
 
     private void saveProjectBudgets(List<ProjectBudget> budgets) throws IOException {
         jsonStore.writeList(projectBudgetsPath, budgets);
+    }
+
+    // ── Imagem de capa do projeto ──────────────────────────────────────────────
+    public List<ProjectCover> listProjectCovers() throws IOException {
+        return loadProjectCovers();
+    }
+
+    public ProjectCover upsertProjectCover(String projectId, String imagem, String user) throws IOException {
+        if (projectId == null || projectId.isBlank())
+            throw new IllegalArgumentException("projectId e obrigatorio.");
+        String img = imagem == null ? "" : imagem.trim();
+        List<ProjectCover> all = new ArrayList<>(loadProjectCovers());
+        all.removeIf(c -> projectId.trim().equals(c.projectId()));
+        ProjectCover updated = img.isEmpty() ? null
+                : new ProjectCover(projectId.trim(), img, OffsetDateTime.now(), user == null ? "" : user);
+        if (updated != null) all.add(updated);
+        saveProjectCovers(all);
+        return updated != null ? updated : new ProjectCover(projectId.trim(), "", OffsetDateTime.now(), user == null ? "" : user);
+    }
+
+    private void removeProjectCover(String projectId) {
+        try {
+            List<ProjectCover> all = new ArrayList<>(loadProjectCovers());
+            if (all.removeIf(c -> projectId.equals(c.projectId()))) saveProjectCovers(all);
+        } catch (IOException ignore) { /* limpeza best-effort */ }
+    }
+
+    private List<ProjectCover> loadProjectCovers() throws IOException {
+        return jsonStore.readList(projectCoversPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveProjectCovers(List<ProjectCover> list) throws IOException {
+        jsonStore.writeList(projectCoversPath, list);
     }
 
     private ProjectRecord update(String projectId, Updater updater) throws IOException {
@@ -780,6 +825,7 @@ public class ProjectService {
         try {
             ensureFile(ganttConfigsPath);
             ensureFile(projectBudgetsPath);
+            ensureFile(projectCoversPath);
         } catch (IOException ex) {
             throw new IllegalStateException("Falha ao inicializar arquivos de dados.", ex);
         }

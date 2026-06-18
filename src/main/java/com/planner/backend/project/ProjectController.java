@@ -61,6 +61,20 @@ public class ProjectController {
         return projectService.duplicate(projectId, username(req));
     }
 
+    // ── Project Covers (imagem do projeto) ──────────────────────────────────────
+
+    @GetMapping("/project-covers")
+    public List<ProjectCover> listProjectCovers() throws IOException {
+        return projectService.listProjectCovers();
+    }
+
+    @PutMapping("/projects/{projectId}/cover")
+    public ProjectCover upsertProjectCover(@PathVariable String projectId,
+                                           @RequestBody UpsertProjectCoverRequest request,
+                                           HttpServletRequest req) throws IOException {
+        return projectService.upsertProjectCover(projectId, request != null ? request.imagem() : null, username(req));
+    }
+
     @PutMapping("/projects/{projectId}")
     public ProjectRecord updateProject(@PathVariable String projectId,
                                        @RequestBody CreateProjectRequest request) throws IOException {
