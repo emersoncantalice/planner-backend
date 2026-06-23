@@ -325,6 +325,7 @@ public final class ProjectModels {
             String fim,            
             boolean recorrente,    
             String observacao,
+            List<String> conflitosOk,
             OffsetDateTime criadoEm) {}
 
     public record CreateAbsenceRequest(
@@ -334,7 +335,8 @@ public final class ProjectModels {
             String inicio,
             String fim,
             boolean recorrente,
-            String observacao) {}
+            String observacao,
+            List<String> conflitosOk) {}
 
     public record ImportPeopleCsvRequest(String csv) {}
     public record ImportPeopleCsvResponse(int criados, int ignorados) {}
@@ -696,6 +698,30 @@ public final class ProjectModels {
 
     public record CreateDrawingRequest(String nome, String pasta) {}
     public record UpdateDrawingRequest(String nome, String data, String pasta) {}
+
+    // ── Minhas Coisas (Things) ──────────────────────────────────────────────────
+    public record ThingRecord(
+            String id,
+            String titulo,
+            String tipo,            // texto | imagem | query | codigo
+            String conteudo,        // text / data URL (image) / raw code/query (indentation preserved)
+            String linguagem,       // optional language hint for query/codigo (sql, java, ...)
+            List<String> labels,
+            String pasta,
+            String criadoPor,
+            OffsetDateTime criadoEm,
+            OffsetDateTime atualizadoEm) {}
+
+    public record CreateThingRequest(
+            String titulo, String tipo, String conteudo,
+            String linguagem, List<String> labels, String pasta) {}
+    public record UpdateThingRequest(
+            String titulo, String tipo, String conteudo,
+            String linguagem, List<String> labels, String pasta) {}
+
+    // Pastas (permite pastas vazias, criadas explicitamente pelo usuário).
+    public record ThingFolderRecord(String pasta, String criadoPor) {}
+    public record CreateThingFolderRequest(String pasta) {}
 
     // ── Periods ───────────────────────────────────────────────────────────────
     public record PeriodRecord(

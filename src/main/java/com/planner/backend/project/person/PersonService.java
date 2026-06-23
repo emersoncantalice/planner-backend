@@ -338,6 +338,7 @@ public class PersonService {
                 request.fim().trim(),
                 request.recorrente(),
                 request.observacao() == null ? "" : request.observacao().trim(),
+                safeStringList(request.conflitosOk()),
                 OffsetDateTime.now());
         List<Absence> all = new ArrayList<>(loadAbsences());
         all.add(absence);
@@ -361,6 +362,7 @@ public class PersonService {
                         request.fim() == null ? a.fim() : request.fim().trim(),
                         request.recorrente(),
                         request.observacao() == null ? a.observacao() : request.observacao().trim(),
+                        request.conflitosOk() == null ? safeStringList(a.conflitosOk()) : safeStringList(request.conflitosOk()),
                         a.criadoEm());
                 all.set(i, updated);
                 saveAbsences(all);
@@ -393,6 +395,15 @@ public class PersonService {
 
     private void saveAbsences(List<Absence> absences) throws IOException {
         jsonStore.writeList(absencesPath, absences);
+    }
+
+    private List<String> safeStringList(List<String> values) {
+        if (values == null) return List.of();
+        return values.stream()
+                .filter(v -> v != null && !v.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
     }
 
     private List<BudgetAllocation> loadBudgetAllocations() throws IOException {
