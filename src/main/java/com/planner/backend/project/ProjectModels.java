@@ -703,9 +703,10 @@ public final class ProjectModels {
     public record ThingRecord(
             String id,
             String titulo,
-            String tipo,            // texto | imagem | query | codigo
-            String conteudo,        // text / data URL (image) / raw code/query (indentation preserved)
+            String tipo,            // texto | imagem | query | codigo | arquivo
+            String conteudo,        // text / data URL (image, arquivo) / raw code/query (indentation preserved)
             String linguagem,       // optional language hint for query/codigo (sql, java, ...)
+            String arquivo,         // original file name (image/arquivo) for download
             List<String> labels,
             String pasta,
             String criadoPor,
@@ -714,10 +715,10 @@ public final class ProjectModels {
 
     public record CreateThingRequest(
             String titulo, String tipo, String conteudo,
-            String linguagem, List<String> labels, String pasta) {}
+            String linguagem, String arquivo, List<String> labels, String pasta) {}
     public record UpdateThingRequest(
             String titulo, String tipo, String conteudo,
-            String linguagem, List<String> labels, String pasta) {}
+            String linguagem, String arquivo, List<String> labels, String pasta) {}
 
     // Pastas (permite pastas vazias, criadas explicitamente pelo usuário).
     public record ThingFolderRecord(String pasta, String criadoPor) {}

@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class ThingService {
 
-    private static final Set<String> ALLOWED_TYPES = Set.of("texto", "imagem", "query", "codigo");
+    private static final Set<String> ALLOWED_TYPES = Set.of("texto", "imagem", "query", "codigo", "arquivo");
 
     private final FileJsonStore jsonStore;
     private final java.nio.file.Path thingsPath;
@@ -74,6 +74,7 @@ public class ThingService {
                 tipo,
                 req.conteudo() != null ? req.conteudo() : "",
                 normalizeLanguage(req.linguagem()),
+                req.arquivo() != null ? req.arquivo().trim() : "",
                 normalizeLabels(req.labels()),
                 normalizeFolder(req.pasta()),
                 username, now, now);
@@ -94,6 +95,7 @@ public class ThingService {
                         req.tipo() != null ? normalizeType(req.tipo()) : t.tipo(),
                         req.conteudo() != null ? req.conteudo() : t.conteudo(),
                         req.linguagem() != null ? normalizeLanguage(req.linguagem()) : t.linguagem(),
+                        req.arquivo() != null ? req.arquivo().trim() : t.arquivo(),
                         req.labels() != null ? normalizeLabels(req.labels()) : t.labels(),
                         req.pasta() != null ? normalizeFolder(req.pasta()) : normalizeFolder(t.pasta()),
                         t.criadoPor(), t.criadoEm(), OffsetDateTime.now());
