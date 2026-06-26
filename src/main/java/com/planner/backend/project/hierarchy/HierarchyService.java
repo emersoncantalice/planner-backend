@@ -25,38 +25,153 @@ public class HierarchyService {
     private static final Set<String> TIPOS_VALIDOS = Set.of(
             "PRESIDENCIA", "VICE_PRESIDENCIA", "SUPERINTENDENCIA", "GERENCIA", "DIRETORIA", "TRIBO", "SQUAD");
 
+    static final String DEFAULT_VIEW_ID = "default";
+    private static final String DEFAULT_VIEW_NOME = "Principal";
+
     private final FileJsonStore jsonStore;
     private final java.nio.file.Path hierarchyPath;
+    private final java.nio.file.Path viewsPath;
 
     public HierarchyService(
             FileJsonStore jsonStore,
             @Value("${planner.data-dir:data}") String dataDir) {
         this.jsonStore = jsonStore;
         this.hierarchyPath = java.nio.file.Path.of(dataDir, "hierarchy-nodes.json");
-        ensureFile();
+        this.viewsPath = java.nio.file.Path.of(dataDir, "hierarchy-views.json");
+        ensureFile(hierarchyPath);
+        ensureFile(viewsPath);
     }
 
-    private void ensureFile() {
+    private void ensureFile(java.nio.file.Path path) {
         try {
-            if (Files.exists(hierarchyPath)) return;
-            java.nio.file.Path parent = hierarchyPath.getParent();
+            if (Files.exists(path)) return;
+            java.nio.file.Path parent = path.getParent();
             if (parent != null) Files.createDirectories(parent);
-            Files.writeString(hierarchyPath, "[]", StandardCharsets.UTF_8);
+            Files.writeString(path, "[]", StandardCharsets.UTF_8);
         } catch (IOException ex) {
             throw new IllegalStateException("Falha ao inicializar arquivo de hierarquia.", ex);
         }
     }
 
-    public List<HierarchyNode> listNodes() throws IOException {
-        return loadNodes();
+    // ── Visoes/cenarios ───────────────────────────────────────────────────────
+
+    /** Id efetivo da visao: null/blank cai na visao padrao. */
+    private String effectiveViewId(String viewId) {
+        return (viewId == null || viewId.isBlank()) ? DEFAULT_VIEW_ID : viewId.trim();
+    }
+
+    /** Visao a que o no pertence (nos legados sem viewId pertencem a visao padrao). */
+    private String nodeViewId(HierarchyNode n) {
+        return effectiveViewId(n == null ? null : n.viewId());
+    }
+
+    /** Lista as visoes, sempre garantindo a visao padrao no topo. */
+    public List<HierarchyView> listViews() throws IOException {
+        List<HierarchyView> views = new ArrayList<>(loadViews());
+        if (views.stream().noneMatch(v -> DEFAULT_VIEW_ID.equals(v.id()))) {
+            views.add(0, new HierarchyView(DEFAULT_VIEW_ID, DEFAULT_VIEW_NOME, 0, OffsetDateTime.now()));
+            saveViews(views);
+        }
+        views.sort((a, b) -> a.ordem() != b.ordem() ? Integer.compare(a.ordem(), b.ordem())
+                : a.criadoEm().compareTo(b.criadoEm()));
+        return views;
+    }
+
+    public HierarchyView createView(String nome) throws IOException {
+        String nomeLimpo = (nome == null ? "" : nome.trim());
+        if (nomeLimpo.isBlank()) throw new IllegalArgumentException("Nome da visao e obrigatorio.");
+        List<HierarchyView> views = new ArrayList<>(listViews());
+        HierarchyView created = new HierarchyView(
+                UUID.randomUUID().toString(), nomeLimpo, nextViewOrdem(views), OffsetDateTime.now());
+        views.add(created);
+        saveViews(views);
+        return created;
+    }
+
+    public HierarchyView renameView(String viewId, String nome) throws IOException {
+        String nomeLimpo = (nome == null ? "" : nome.trim());
+        if (nomeLimpo.isBlank()) throw new IllegalArgumentException("Nome da visao e obrigatorio.");
+        List<HierarchyView> views = new ArrayList<>(listViews());
+        for (int i = 0; i < views.size(); i++) {
+            if (views.get(i).id().equals(viewId)) {
+                HierarchyView v = views.get(i);
+                HierarchyView updated = new HierarchyView(v.id(), nomeLimpo, v.ordem(), v.criadoEm());
+                views.set(i, updated);
+                saveViews(views);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Visao nao encontrada.");
+    }
+
+    /** Duplica todos os nos da visao de origem em uma visao nova (ids e vinculos remapeados). */
+    public HierarchyView duplicateView(String sourceViewId, String nome) throws IOException {
+        String origem = effectiveViewId(sourceViewId);
+        List<HierarchyView> views = new ArrayList<>(listViews());
+        if (views.stream().noneMatch(v -> v.id().equals(origem)))
+            throw new IllegalArgumentException("Visao de origem nao encontrada.");
+        String nomeLimpo = (nome == null ? "" : nome.trim());
+        if (nomeLimpo.isBlank()) throw new IllegalArgumentException("Nome da visao e obrigatorio.");
+
+        HierarchyView nova = new HierarchyView(
+                UUID.randomUUID().toString(), nomeLimpo, nextViewOrdem(views), OffsetDateTime.now());
+
+        List<HierarchyNode> all = new ArrayList<>(loadNodes());
+        List<HierarchyNode> origemNodes = all.stream().filter(n -> nodeViewId(n).equals(origem)).toList();
+        // Remapeia os ids para que a copia seja totalmente independente da origem.
+        Map<String, String> idMap = new LinkedHashMap<>();
+        for (HierarchyNode n : origemNodes) idMap.put(n.id(), UUID.randomUUID().toString());
+        for (HierarchyNode n : origemNodes) {
+            List<String> novosPais = parentsOf(n).stream()
+                    .map(idMap::get).filter(p -> p != null).toList();
+            all.add(new HierarchyNode(
+                    idMap.get(n.id()), n.tipo(), n.nome(), n.descricao(),
+                    novosPais.isEmpty() ? null : novosPais.get(0), novosPais, n.ordem(),
+                    n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(),
+                    nova.id(), OffsetDateTime.now()));
+        }
+        saveNodes(all);
+
+        views.add(nova);
+        saveViews(views);
+        return nova;
+    }
+
+    public void deleteView(String viewId) throws IOException {
+        String alvo = effectiveViewId(viewId);
+        List<HierarchyView> views = new ArrayList<>(listViews());
+        if (views.size() <= 1) throw new IllegalArgumentException("Nao e possivel excluir a unica visao.");
+        if (views.stream().noneMatch(v -> v.id().equals(alvo)))
+            throw new IllegalArgumentException("Visao nao encontrada.");
+        views.removeIf(v -> v.id().equals(alvo));
+        saveViews(views);
+        // remove os nos pertencentes a visao excluida
+        List<HierarchyNode> all = new ArrayList<>(loadNodes());
+        all.removeIf(n -> nodeViewId(n).equals(alvo));
+        saveNodes(all);
+    }
+
+    private int nextViewOrdem(List<HierarchyView> views) {
+        return views.stream().mapToInt(HierarchyView::ordem).max().orElse(-1) + 1;
+    }
+
+    // ── Nos ────────────────────────────────────────────────────────────────────
+
+    public List<HierarchyNode> listNodes(String viewId) throws IOException {
+        String alvo = effectiveViewId(viewId);
+        List<HierarchyNode> out = new ArrayList<>();
+        for (HierarchyNode n : loadNodes()) if (nodeViewId(n).equals(alvo)) out.add(n);
+        return out;
     }
 
     public HierarchyNode createNode(CreateHierarchyNodeRequest request) throws IOException {
         validate(request);
         List<HierarchyNode> all = new ArrayList<>(loadNodes());
+        String viewId = effectiveViewId(request.viewId());
+        List<HierarchyNode> viewNodes = nodesOfView(all, viewId);
         List<String> parents = normalizeParents(request);
-        validarPaisExistem(all, parents, null);
-        int ordem = request.ordem() != null ? request.ordem() : nextOrdem(all, parents);
+        validarPaisExistem(viewNodes, parents, null);
+        int ordem = request.ordem() != null ? request.ordem() : nextOrdem(viewNodes, parents);
         String tipo = normalizeTipo(request.tipo());
         HierarchyNode created = new HierarchyNode(
                 UUID.randomUUID().toString(),
@@ -70,20 +185,32 @@ public class HierarchyService {
                 sanitizeLoIds(request.loIds()),
                 sanitizeProjetoIds(request.projetoIds()),
                 sanitizeProjetoIds(request.projetosOcultos()),
+                viewId,
                 OffsetDateTime.now());
         all.add(created);
         saveNodes(all);
         return created;
     }
 
+    /** Sublista dos nos que pertencem a uma visao (usada para validacoes/ordem por escopo). */
+    private List<HierarchyNode> nodesOfView(List<HierarchyNode> all, String viewId) {
+        String alvo = effectiveViewId(viewId);
+        List<HierarchyNode> out = new ArrayList<>();
+        for (HierarchyNode n : all) if (nodeViewId(n).equals(alvo)) out.add(n);
+        return out;
+    }
+
     public HierarchyNode updateNode(String nodeId, CreateHierarchyNodeRequest request) throws IOException {
         validate(request);
         List<HierarchyNode> all = new ArrayList<>(loadNodes());
+        HierarchyNode atual = all.stream().filter(n -> nodeId.equals(n.id())).findFirst().orElse(null);
+        String viewId = nodeViewId(atual);
+        List<HierarchyNode> viewNodes = nodesOfView(all, viewId);
         List<String> parents = normalizeParents(request);
         if (parents.contains(nodeId))
             throw new IllegalArgumentException("Um no nao pode ser pai de si mesmo.");
-        validarPaisExistem(all, parents, nodeId);
-        if (createsCycle(all, nodeId, parents))
+        validarPaisExistem(viewNodes, parents, nodeId);
+        if (createsCycle(viewNodes, nodeId, parents))
             throw new IllegalArgumentException("Hierarquia invalida: ciclo detectado.");
         for (int i = 0; i < all.size(); i++) {
             HierarchyNode n = all.get(i);
@@ -101,6 +228,7 @@ public class HierarchyService {
                     sanitizeLoIds(request.loIds()),
                     sanitizeProjetoIds(request.projetoIds()),
                     sanitizeProjetoIds(request.projetosOcultos()),
+                    n.viewId(),
                     n.criadoEm());
             all.set(i, updated);
             saveNodes(all);
@@ -147,13 +275,13 @@ public class HierarchyService {
 
     private HierarchyNode withMembros(HierarchyNode n, List<HierarchyMember> membros) {
         return new HierarchyNode(n.id(), n.tipo(), n.nome(), n.descricao(), n.parentId(), parentsOf(n), n.ordem(),
-                membros, n.loIds(), n.projetoIds(), n.projetosOcultos(), n.criadoEm());
+                membros, n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm());
     }
 
     private HierarchyNode withParents(HierarchyNode n, List<String> parents) {
         return new HierarchyNode(n.id(), n.tipo(), n.nome(), n.descricao(),
                 parents.isEmpty() ? null : parents.get(0), parents, n.ordem(),
-                n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(), n.criadoEm());
+                n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm());
     }
 
     private String norm(String value) {
@@ -337,5 +465,13 @@ public class HierarchyService {
 
     private void saveNodes(List<HierarchyNode> nodes) throws IOException {
         jsonStore.writeList(hierarchyPath, nodes);
+    }
+
+    private List<HierarchyView> loadViews() throws IOException {
+        return jsonStore.readList(viewsPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveViews(List<HierarchyView> views) throws IOException {
+        jsonStore.writeList(viewsPath, views);
     }
 }

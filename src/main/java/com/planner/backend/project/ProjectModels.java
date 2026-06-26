@@ -780,7 +780,17 @@ public final class ProjectModels {
             java.util.List<String> loIds,
             java.util.List<String> projetoIds,     // projetos vinculados (tribos/squads)
             java.util.List<String> projetosOcultos,// projetos vinculados porem ocultos neste time
+            String viewId,                         // visao/cenario a que o no pertence (null = visao padrao)
             OffsetDateTime criadoEm) {}
+
+    // Uma visao/cenario e uma copia independente da hierarquia (mostrada como aba).
+    public record HierarchyView(
+            String id,
+            String nome,
+            int ordem,
+            OffsetDateTime criadoEm) {}
+
+    public record HierarchyViewRequest(String nome) {}
 
     public record CreateHierarchyNodeRequest(
             String tipo,
@@ -792,7 +802,8 @@ public final class ProjectModels {
             java.util.List<HierarchyMember> membros,
             java.util.List<String> loIds,
             java.util.List<String> projetoIds,
-            java.util.List<String> projetosOcultos) {}
+            java.util.List<String> projetosOcultos,
+            String viewId) {}
 
     public record MoveHierarchyMemberRequest(
             String fromNodeId,

@@ -23,8 +23,36 @@ public class HierarchyController {
     }
 
     @GetMapping
-    public List<HierarchyNode> list() throws IOException {
-        return hierarchyService.listNodes();
+    public List<HierarchyNode> list(@RequestParam(required = false) String viewId) throws IOException {
+        return hierarchyService.listNodes(viewId);
+    }
+
+    // ── Visoes/cenarios (abas) ────────────────────────────────────────────────
+
+    @GetMapping("/views")
+    public List<HierarchyView> listViews() throws IOException {
+        return hierarchyService.listViews();
+    }
+
+    @PostMapping("/views")
+    public HierarchyView createView(@RequestBody HierarchyViewRequest request) throws IOException {
+        return hierarchyService.createView(request == null ? null : request.nome());
+    }
+
+    @PostMapping("/views/{viewId}/duplicate")
+    public HierarchyView duplicateView(@PathVariable String viewId, @RequestBody HierarchyViewRequest request) throws IOException {
+        return hierarchyService.duplicateView(viewId, request == null ? null : request.nome());
+    }
+
+    @PutMapping("/views/{viewId}")
+    public HierarchyView renameView(@PathVariable String viewId, @RequestBody HierarchyViewRequest request) throws IOException {
+        return hierarchyService.renameView(viewId, request == null ? null : request.nome());
+    }
+
+    @DeleteMapping("/views/{viewId}")
+    public ResponseEntity<Void> deleteView(@PathVariable String viewId) throws IOException {
+        hierarchyService.deleteView(viewId);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping
