@@ -458,21 +458,18 @@ public class PersonService {
         String tipo = request.tipoVinculo().trim().toUpperCase();
         if (!tipo.equals("BV") && !tipo.equals("TERCEIRO"))
             throw new IllegalArgumentException("Tipo de vinculo deve ser BV ou TERCEIRO.");
-        Profile profile;
         try {
-            profile = profileService.loadProfiles().stream()
+            profileService.loadProfiles().stream()
                     .filter(p -> p.id().equals(request.perfilId()))
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("Perfil da pessoa nao encontrado."));
         } catch (IOException ex) {
             throw new IllegalStateException("Falha ao validar perfil da pessoa.", ex);
         }
-        boolean debitaLo = profile.debitaLo();
         if (tipo.equals("TERCEIRO")) {
             if (request.consultoria() == null || request.consultoria().isBlank())
                 throw new IllegalArgumentException("Prestador de servico e obrigatorio para terceiros.");
-            if (debitaLo && (request.valorHora() == null || request.valorHora().compareTo(BigDecimal.ZERO) <= 0))
-                throw new IllegalArgumentException("Valor hora e obrigatorio para terceiros.");
+            // Valor hora e opcional: quando ausente, assume o valor hora do perfil (ver resolveValorHora).
             boolean prestadorExiste;
             try {
                 String nomeConsultoria = request.consultoria().trim();
@@ -488,7 +485,12 @@ public class PersonService {
     private BigDecimal resolveValorHora(CreatePersonRequest request, Profile profile) throws IOException {
         if (!profile.debitaLo()) return profile.valorHora();
         String tipo = request.tipoVinculo().trim().toUpperCase();
-        if (tipo.equals("TERCEIRO")) return request.valorHora();
+        if (tipo.equals("TERCEIRO")) {
+            // Terceiro pode informar um valor hora proprio; sem ele, herda o valor hora do perfil.
+            if (request.valorHora() != null && request.valorHora().compareTo(BigDecimal.ZERO) > 0)
+                return request.valorHora();
+            return profile.valorHora();
+        }
         // For BV/Folha: prefer explicit valorHora if provided
         if (request.valorHora() != null && request.valorHora().compareTo(BigDecimal.ZERO) > 0)
             return request.valorHora();

@@ -758,7 +758,7 @@ public final class ProjectModels {
     public record PersonImageEntry(String personId, String dataUrl) {}
 
     // ── Hierarquia organizacional ──────────────────────────────────────────
-    // tipo: PRESIDENCIA | VICE_PRESIDENCIA | SUPERINTENDENCIA | DIRETORIA | GERENCIA | TRIBO | SQUAD
+    // tipo: PRESIDENCIA | VICE_PRESIDENCIA | SUPERINTENDENCIA | DIRETORIA | GERENCIA | TRIBO | SQUAD | CUSTOM
     public record HierarchyMember(
             String personId,
             String nomePessoa,
@@ -771,6 +771,7 @@ public final class ProjectModels {
     public record HierarchyNode(
             String id,
             String tipo,
+            String tipoRotulo,                     // rotulo do tipo quando tipo=CUSTOM (ex.: "Chapter"); null nos demais
             String nome,
             String descricao,
             String parentId,                       // legado: espelha o primeiro pai (compatibilidade)
@@ -794,6 +795,7 @@ public final class ProjectModels {
 
     public record CreateHierarchyNodeRequest(
             String tipo,
+            String tipoRotulo,                     // rotulo do tipo quando tipo=CUSTOM
             String nome,
             String descricao,
             String parentId,                       // legado (pai unico)

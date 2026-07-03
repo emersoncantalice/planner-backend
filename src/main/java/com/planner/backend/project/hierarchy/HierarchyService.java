@@ -23,7 +23,7 @@ import org.springframework.stereotype.Service;
 public class HierarchyService {
 
     private static final Set<String> TIPOS_VALIDOS = Set.of(
-            "PRESIDENCIA", "VICE_PRESIDENCIA", "SUPERINTENDENCIA", "GERENCIA", "DIRETORIA", "TRIBO", "SQUAD");
+            "PRESIDENCIA", "VICE_PRESIDENCIA", "SUPERINTENDENCIA", "GERENCIA", "DIRETORIA", "TRIBO", "SQUAD", "CUSTOM");
 
     static final String DEFAULT_VIEW_ID = "default";
     private static final String DEFAULT_VIEW_NOME = "Principal";
@@ -125,7 +125,7 @@ public class HierarchyService {
             List<String> novosPais = parentsOf(n).stream()
                     .map(idMap::get).filter(p -> p != null).toList();
             all.add(new HierarchyNode(
-                    idMap.get(n.id()), n.tipo(), n.nome(), n.descricao(),
+                    idMap.get(n.id()), n.tipo(), n.tipoRotulo(), n.nome(), n.descricao(),
                     novosPais.isEmpty() ? null : novosPais.get(0), novosPais, n.ordem(),
                     n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(),
                     nova.id(), OffsetDateTime.now()));
@@ -176,6 +176,7 @@ public class HierarchyService {
         HierarchyNode created = new HierarchyNode(
                 UUID.randomUUID().toString(),
                 tipo,
+                sanitizeRotulo(request.tipoRotulo(), tipo),
                 request.nome().trim(),
                 request.descricao() == null ? "" : request.descricao().trim(),
                 parents.isEmpty() ? null : parents.get(0),
@@ -219,6 +220,7 @@ public class HierarchyService {
             HierarchyNode updated = new HierarchyNode(
                     n.id(),
                     tipo,
+                    sanitizeRotulo(request.tipoRotulo(), tipo),
                     request.nome().trim(),
                     request.descricao() == null ? "" : request.descricao().trim(),
                     parents.isEmpty() ? null : parents.get(0),
@@ -274,12 +276,12 @@ public class HierarchyService {
     }
 
     private HierarchyNode withMembros(HierarchyNode n, List<HierarchyMember> membros) {
-        return new HierarchyNode(n.id(), n.tipo(), n.nome(), n.descricao(), n.parentId(), parentsOf(n), n.ordem(),
+        return new HierarchyNode(n.id(), n.tipo(), n.tipoRotulo(), n.nome(), n.descricao(), n.parentId(), parentsOf(n), n.ordem(),
                 membros, n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm());
     }
 
     private HierarchyNode withParents(HierarchyNode n, List<String> parents) {
-        return new HierarchyNode(n.id(), n.tipo(), n.nome(), n.descricao(),
+        return new HierarchyNode(n.id(), n.tipo(), n.tipoRotulo(), n.nome(), n.descricao(),
                 parents.isEmpty() ? null : parents.get(0), parents, n.ordem(),
                 n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm());
     }
@@ -331,11 +333,22 @@ public class HierarchyService {
         if (request.nome() == null || request.nome().isBlank())
             throw new IllegalArgumentException("Nome do no e obrigatorio.");
         if (request.tipo() == null || !TIPOS_VALIDOS.contains(request.tipo().trim().toUpperCase()))
-            throw new IllegalArgumentException("Tipo deve ser PRESIDENCIA, VICE_PRESIDENCIA, SUPERINTENDENCIA, DIRETORIA, GERENCIA, TRIBO ou SQUAD.");
+            throw new IllegalArgumentException("Tipo deve ser PRESIDENCIA, VICE_PRESIDENCIA, SUPERINTENDENCIA, DIRETORIA, GERENCIA, TRIBO, SQUAD ou CUSTOM.");
+        if ("CUSTOM".equals(request.tipo().trim().toUpperCase())
+                && (request.tipoRotulo() == null || request.tipoRotulo().isBlank()))
+            throw new IllegalArgumentException("Informe o nome do tipo da estrutura personalizada.");
     }
 
     private String normalizeTipo(String tipo) {
         return tipo.trim().toUpperCase();
+    }
+
+    /** Rotulo do tipo so faz sentido em CUSTOM; nos demais tipos e sempre nulo. */
+    private String sanitizeRotulo(String rotulo, String tipo) {
+        if (!"CUSTOM".equals(tipo)) return null;
+        if (rotulo == null) return null;
+        String trimmed = rotulo.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /** Pais efetivos de um no: parentIds quando presente; senao cai no parentId legado. */
@@ -375,7 +388,7 @@ public class HierarchyService {
 
     private boolean tipoPermiteMarcacoesDeTime(String tipo) {
         String normalized = tipo == null ? "" : tipo.trim().toUpperCase();
-        return normalized.equals("TRIBO") || normalized.equals("SQUAD");
+        return normalized.equals("TRIBO") || normalized.equals("SQUAD") || normalized.equals("CUSTOM");
     }
 
     private List<HierarchyMember> sanitizeMembros(List<HierarchyMember> membros, String tipo) {
