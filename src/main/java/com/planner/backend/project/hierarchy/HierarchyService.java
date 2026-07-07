@@ -128,7 +128,7 @@ public class HierarchyService {
                     idMap.get(n.id()), n.tipo(), n.tipoRotulo(), n.nome(), n.descricao(),
                     novosPais.isEmpty() ? null : novosPais.get(0), novosPais, n.ordem(),
                     n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(),
-                    nova.id(), OffsetDateTime.now()));
+                    nova.id(), OffsetDateTime.now(), n.posX(), n.posY()));
         }
         saveNodes(all);
 
@@ -187,7 +187,9 @@ public class HierarchyService {
                 sanitizeProjetoIds(request.projetoIds()),
                 sanitizeProjetoIds(request.projetosOcultos()),
                 viewId,
-                OffsetDateTime.now());
+                OffsetDateTime.now(),
+                request.posX(),
+                request.posY());
         all.add(created);
         saveNodes(all);
         return created;
@@ -231,7 +233,9 @@ public class HierarchyService {
                     sanitizeProjetoIds(request.projetoIds()),
                     sanitizeProjetoIds(request.projetosOcultos()),
                     n.viewId(),
-                    n.criadoEm());
+                    n.criadoEm(),
+                    request.posX() != null ? request.posX() : n.posX(),
+                    request.posY() != null ? request.posY() : n.posY());
             all.set(i, updated);
             saveNodes(all);
             return updated;
@@ -277,13 +281,13 @@ public class HierarchyService {
 
     private HierarchyNode withMembros(HierarchyNode n, List<HierarchyMember> membros) {
         return new HierarchyNode(n.id(), n.tipo(), n.tipoRotulo(), n.nome(), n.descricao(), n.parentId(), parentsOf(n), n.ordem(),
-                membros, n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm());
+                membros, n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm(), n.posX(), n.posY());
     }
 
     private HierarchyNode withParents(HierarchyNode n, List<String> parents) {
         return new HierarchyNode(n.id(), n.tipo(), n.tipoRotulo(), n.nome(), n.descricao(),
                 parents.isEmpty() ? null : parents.get(0), parents, n.ordem(),
-                n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm());
+                n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm(), n.posX(), n.posY());
     }
 
     private String norm(String value) {
