@@ -214,13 +214,13 @@ public class BudgetAllocationService {
             for (int i = 0; i < all.size(); i++) {
                 AllocationMonthlyState s = all.get(i);
                 if (allocationId.equals(s.allocationId()) && s.month() == month) {
-                    all.set(i, new AllocationMonthlyState(allocationId, month, true, s.manualValue(), s.manualPercent(), OffsetDateTime.now(), "system"));
+                    all.set(i, new AllocationMonthlyState(allocationId, month, true, s.manualValue(), s.manualPercent(), s.rateAdjust(), OffsetDateTime.now(), "system"));
                     found = true;
                     break;
                 }
             }
             if (!found) {
-                all.add(new AllocationMonthlyState(allocationId, month, true, null, null, OffsetDateTime.now(), "system"));
+                all.add(new AllocationMonthlyState(allocationId, month, true, null, null, null, OffsetDateTime.now(), "system"));
             }
         }
         saveAllocationMonthlyStates(all);

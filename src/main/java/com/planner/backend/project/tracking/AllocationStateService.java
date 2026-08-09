@@ -144,10 +144,11 @@ public class AllocationStateService {
         String alloc = allocationId.trim();
         BigDecimal manualValue   = request != null ? request.manualValue() : null;
         BigDecimal manualPercent = request != null ? request.manualPercent() : null;
+        BigDecimal rateAdjust    = request != null ? request.rateAdjust() : null;
         AllocationMonthlyState updated = new AllocationMonthlyState(
                 alloc, month,
                 request != null ? request.canceled() : null,
-                manualValue, manualPercent,
+                manualValue, manualPercent, rateAdjust,
                 OffsetDateTime.now(), user);
         List<AllocationMonthlyState> all = new ArrayList<>(loadAllocationMonthlyStates());
         boolean replaced = false;

@@ -386,13 +386,19 @@ public final class ProjectModels {
             Boolean canceled,
             BigDecimal manualValue,
             BigDecimal manualPercent,
+            /**
+             * Reajuste acumulado (%) aplicado sobre o VALOR da hora neste mes.
+             * Nao mexe na quantidade de horas: custo = valorHora * (1 + rateAdjust/100) * horas * alocacao%.
+             */
+            BigDecimal rateAdjust,
             OffsetDateTime updatedAt,
             String updatedBy) {}
 
     public record UpdateAllocationMonthlyStateRequest(
             Boolean canceled,
             BigDecimal manualValue,
-            BigDecimal manualPercent) {}
+            BigDecimal manualPercent,
+            BigDecimal rateAdjust) {}
 
     public record AllocationCursorState(
             String username,
