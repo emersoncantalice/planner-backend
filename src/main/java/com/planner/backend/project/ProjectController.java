@@ -234,6 +234,31 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
+    // ── Project Budget Templates ──────────────────────────────────────────────
+
+    @GetMapping("/project-budget-templates")
+    public List<ProjectBudgetTemplate> listProjectBudgetTemplates() throws IOException {
+        return projectService.listProjectBudgetTemplates();
+    }
+
+    @PostMapping("/project-budget-templates")
+    public ProjectBudgetTemplate createProjectBudgetTemplate(@RequestBody CreateProjectBudgetTemplateRequest request,
+                                                             HttpServletRequest req) throws IOException {
+        return projectService.createProjectBudgetTemplate(request, username(req));
+    }
+
+    @PutMapping("/project-budget-templates/{id}")
+    public ProjectBudgetTemplate updateProjectBudgetTemplate(@PathVariable String id,
+                                                             @RequestBody CreateProjectBudgetTemplateRequest request) throws IOException {
+        return projectService.updateProjectBudgetTemplate(id, request);
+    }
+
+    @DeleteMapping("/project-budget-templates/{id}")
+    public ResponseEntity<Void> deleteProjectBudgetTemplate(@PathVariable String id) throws IOException {
+        projectService.deleteProjectBudgetTemplate(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // ── Ownership ─────────────────────────────────────────────────────────────
 
     @PostMapping("/ownership/replace")

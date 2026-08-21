@@ -27,6 +27,7 @@ public class ProjectService {
     private final ProjectStorePort projectStorePort;
     private final java.nio.file.Path ganttConfigsPath;
     private final java.nio.file.Path projectBudgetsPath;
+    private final java.nio.file.Path projectBudgetTemplatesPath;
     private final java.nio.file.Path projectCoversPath;
     private final com.planner.backend.auth.FileJsonStore jsonStore;
     private final ProfileService profileService;
@@ -56,6 +57,7 @@ public class ProjectService {
         this.budgetLineService = budgetLineService;
         this.ganttConfigsPath   = java.nio.file.Path.of(dataDir, "gantt-configs.json");
         this.projectBudgetsPath = java.nio.file.Path.of(dataDir, "project-budgets.json");
+        this.projectBudgetTemplatesPath = java.nio.file.Path.of(dataDir, "project-budget-templates.json");
         this.projectCoversPath  = java.nio.file.Path.of(dataDir, "project-covers.json");
         ensureDataFiles();
     }
@@ -646,6 +648,7 @@ public class ProjectService {
         ProjectBudget created = new ProjectBudget(UUID.randomUUID().toString(), req.nome().trim(),
                 req.descricao(),
                 req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                req.custosCloud() != null ? req.custosCloud() : new ArrayList<>(),
                 OffsetDateTime.now(), criadoPor);
         List<ProjectBudget> all = new ArrayList<>(loadProjectBudgets());
         all.add(created);
@@ -662,6 +665,7 @@ public class ProjectService {
             if (curr.id().equals(id)) {
                 ProjectBudget updated = new ProjectBudget(curr.id(), req.nome().trim(), req.descricao(),
                         req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                        req.custosCloud() != null ? req.custosCloud() : new ArrayList<>(),
                         curr.criadoEm(), curr.criadoPor());
                 all.set(i, updated);
                 saveProjectBudgets(all);
@@ -676,6 +680,52 @@ public class ProjectService {
         boolean removed = all.removeIf(b -> b.id().equals(id));
         if (!removed) throw new IllegalArgumentException("Orcamento nao encontrado.");
         saveProjectBudgets(all);
+    }
+
+    // ── Project Budget Templates ──────────────────────────────────────────────
+
+    public List<ProjectBudgetTemplate> listProjectBudgetTemplates() throws IOException {
+        return loadProjectBudgetTemplates();
+    }
+
+    public ProjectBudgetTemplate createProjectBudgetTemplate(CreateProjectBudgetTemplateRequest req, String criadoPor)
+            throws IOException {
+        if (req == null || req.nome() == null || req.nome().isBlank())
+            throw new IllegalArgumentException("Nome do template e obrigatorio.");
+        ProjectBudgetTemplate created = new ProjectBudgetTemplate(UUID.randomUUID().toString(), req.nome().trim(),
+                req.descricao(),
+                req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                OffsetDateTime.now(), criadoPor);
+        List<ProjectBudgetTemplate> all = new ArrayList<>(loadProjectBudgetTemplates());
+        all.add(created);
+        saveProjectBudgetTemplates(all);
+        return created;
+    }
+
+    public ProjectBudgetTemplate updateProjectBudgetTemplate(String id, CreateProjectBudgetTemplateRequest req)
+            throws IOException {
+        if (req == null || req.nome() == null || req.nome().isBlank())
+            throw new IllegalArgumentException("Nome do template e obrigatorio.");
+        List<ProjectBudgetTemplate> all = new ArrayList<>(loadProjectBudgetTemplates());
+        for (int i = 0; i < all.size(); i++) {
+            ProjectBudgetTemplate curr = all.get(i);
+            if (curr.id().equals(id)) {
+                ProjectBudgetTemplate updated = new ProjectBudgetTemplate(curr.id(), req.nome().trim(), req.descricao(),
+                        req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                        curr.criadoEm(), curr.criadoPor());
+                all.set(i, updated);
+                saveProjectBudgetTemplates(all);
+                return updated;
+            }
+        }
+        throw new IllegalArgumentException("Template nao encontrado.");
+    }
+
+    public void deleteProjectBudgetTemplate(String id) throws IOException {
+        List<ProjectBudgetTemplate> all = new ArrayList<>(loadProjectBudgetTemplates());
+        boolean removed = all.removeIf(t -> t.id().equals(id));
+        if (!removed) throw new IllegalArgumentException("Template nao encontrado.");
+        saveProjectBudgetTemplates(all);
     }
 
     // ── I/O helpers ───────────────────────────────────────────────────────────
@@ -697,6 +747,14 @@ public class ProjectService {
 
     private void saveProjectBudgets(List<ProjectBudget> budgets) throws IOException {
         jsonStore.writeList(projectBudgetsPath, budgets);
+    }
+
+    private List<ProjectBudgetTemplate> loadProjectBudgetTemplates() throws IOException {
+        return jsonStore.readList(projectBudgetTemplatesPath, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    private void saveProjectBudgetTemplates(List<ProjectBudgetTemplate> templates) throws IOException {
+        jsonStore.writeList(projectBudgetTemplatesPath, templates);
     }
 
     // ── Imagem de capa do projeto ──────────────────────────────────────────────
@@ -825,6 +883,7 @@ public class ProjectService {
         try {
             ensureFile(ganttConfigsPath);
             ensureFile(projectBudgetsPath);
+            ensureFile(projectBudgetTemplatesPath);
             ensureFile(projectCoversPath);
         } catch (IOException ex) {
             throw new IllegalStateException("Falha ao inicializar arquivos de dados.", ex);

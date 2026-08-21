@@ -654,18 +654,52 @@ public final class ProjectModels {
             String dataFim,
             String cor) {}
 
+    /** Custo de cloud lancado por mes; o total anual e mensal x mesesContratados. */
+    public record ProjectBudgetCloudCost(
+            String id,
+            String nome,
+            String servico,
+            Double valorMensal,
+            Integer mesesContratados) {}
+
     public record ProjectBudget(
             String id,
             String nome,
             String descricao,
             List<ProjectBudgetActivity> atividades,
+            List<ProjectBudgetCloudCost> custosCloud,
             OffsetDateTime criadoEm,
             String criadoPor) {}
 
     public record CreateProjectBudgetRequest(
             String nome,
             String descricao,
-            List<ProjectBudgetActivity> atividades) {}
+            List<ProjectBudgetActivity> atividades,
+            List<ProjectBudgetCloudCost> custosCloud) {}
+
+    // ── Project Budget Templates ───────────────────────────────────────────────
+    /** Atividade de template: sem datas absolutas, apenas deslocamento/duracao em dias. */
+    public record ProjectBudgetTemplateActivity(
+            String id,
+            String nome,
+            String perfilId,
+            Double horas,
+            Integer offsetDias,
+            Integer duracaoDias,
+            String cor) {}
+
+    public record ProjectBudgetTemplate(
+            String id,
+            String nome,
+            String descricao,
+            List<ProjectBudgetTemplateActivity> atividades,
+            OffsetDateTime criadoEm,
+            String criadoPor) {}
+
+    public record CreateProjectBudgetTemplateRequest(
+            String nome,
+            String descricao,
+            List<ProjectBudgetTemplateActivity> atividades) {}
 
     public record TransferOwnershipRequest(String novoDono) {}
 
