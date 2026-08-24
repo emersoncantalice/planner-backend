@@ -106,6 +106,7 @@ public class PersonService {
                 request.ativo(),
                 request.vagasAnteriores() != null ? request.vagasAnteriores() : java.util.List.of(),
                 request.contaFte() == null ? Boolean.TRUE : request.contaFte(),
+                normalizeGrupos(request.grupos()),
                 OffsetDateTime.now());
         List<Person> all = new ArrayList<>(loadPeople());
         all.add(created);
@@ -142,6 +143,7 @@ public class PersonService {
                         request.vagasAnteriores() != null ? request.vagasAnteriores()
                                 : (p.vagasAnteriores() != null ? p.vagasAnteriores() : java.util.List.of()),
                         request.contaFte() == null ? (p.contaFte() == null ? Boolean.TRUE : p.contaFte()) : request.contaFte(),
+                        normalizeGrupos(request.grupos() == null ? p.grupos() : request.grupos()),
                         p.criadoEm());
                 all.set(i, updated);
                 savePeople(all);
@@ -303,9 +305,13 @@ public class PersonService {
             if (profile == null) { ignorados++; continue; }
             String vagaUrl   = cols.length > 6 ? stripQuotes(cols[6]) : null;
             String vagaAlias = cols.length > 7 ? stripQuotes(cols[7]) : null;
+            // Varios grupos na mesma coluna vao separados por ';' (a virgula ja separa colunas).
+            List<String> grupos = cols.length > 8
+                    ? List.of(stripQuotes(cols[8]).split(";"))
+                    : List.of();
             try {
                 createPerson(new CreatePersonRequest(nome, profile.id(), tipoVinculo, consultoria,
-                        valorHora, valorMensal, vagaUrl, vagaAlias, null, null, true, null, null));
+                        valorHora, valorMensal, vagaUrl, vagaAlias, null, null, true, null, null, grupos));
                 criados++;
             } catch (IllegalArgumentException ex) {
                 ignorados++;
@@ -515,14 +521,33 @@ public class PersonService {
     }
 
     private Person normalizePerson(Person p) {
-        if (p.ativo() != null) return p;
+        if (p.ativo() != null && p.grupos() != null) return p;
         return new Person(p.id(), p.nome(), p.perfilId(), p.perfilNome(),
                 p.tipoVinculo(), p.consultoria(), p.valorHora(), p.valorMensal(),
                 p.vagaUrl(), p.vagaAlias(), p.dataNascimento(), p.contato(),
-                true,
+                p.ativo() == null ? Boolean.TRUE : p.ativo(),
                 p.vagasAnteriores() != null ? p.vagasAnteriores() : java.util.List.of(),
                 p.contaFte() == null ? Boolean.TRUE : p.contaFte(),
+                normalizeGrupos(p.grupos()),
                 p.criadoEm());
+    }
+
+    /**
+     * Grupos sao rotulos livres e uma pessoa pode estar em varios. Normaliza para
+     * lista vazia quando ausente, descarta valores em branco e remove repetidos
+     * ignorando caixa/espacos (mantendo a primeira grafia informada).
+     */
+    private static List<String> normalizeGrupos(List<String> grupos) {
+        if (grupos == null) return List.of();
+        List<String> out = new ArrayList<>();
+        Set<String> vistos = new java.util.HashSet<>();
+        for (String g : grupos) {
+            if (g == null) continue;
+            String limpo = g.trim();
+            if (limpo.isEmpty()) continue;
+            if (vistos.add(limpo.toLowerCase(Locale.ROOT))) out.add(limpo);
+        }
+        return List.copyOf(out);
     }
 
     private <T> List<T> safeList(List<T> list) {

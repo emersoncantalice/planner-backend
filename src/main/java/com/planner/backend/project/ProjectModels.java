@@ -298,6 +298,7 @@ public final class ProjectModels {
             Boolean ativo,
             java.util.List<VagaHistorico> vagasAnteriores,
             Boolean contaFte,
+            java.util.List<String> grupos,   // agrupamentos livres (squad/time); lista vazia = sem grupo
             OffsetDateTime criadoEm) {}
 
     public record CreatePersonRequest(
@@ -313,7 +314,8 @@ public final class ProjectModels {
             String contato,
             boolean ativo,
             java.util.List<VagaHistorico> vagasAnteriores,
-            Boolean contaFte) {}
+            Boolean contaFte,
+            java.util.List<String> grupos) {}
 
     
     public record Absence(
