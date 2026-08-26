@@ -646,7 +646,7 @@ public class ProjectService {
         if (req == null || req.nome() == null || req.nome().isBlank())
             throw new IllegalArgumentException("Nome do orcamento e obrigatorio.");
         ProjectBudget created = new ProjectBudget(UUID.randomUUID().toString(), req.nome().trim(),
-                req.descricao(),
+                req.descricao(), req.dataBase(),
                 req.atividades() != null ? req.atividades() : new ArrayList<>(),
                 req.custosCloud() != null ? req.custosCloud() : new ArrayList<>(),
                 OffsetDateTime.now(), criadoPor);
@@ -664,6 +664,7 @@ public class ProjectService {
             ProjectBudget curr = all.get(i);
             if (curr.id().equals(id)) {
                 ProjectBudget updated = new ProjectBudget(curr.id(), req.nome().trim(), req.descricao(),
+                        req.dataBase(),
                         req.atividades() != null ? req.atividades() : new ArrayList<>(),
                         req.custosCloud() != null ? req.custosCloud() : new ArrayList<>(),
                         curr.criadoEm(), curr.criadoPor());

@@ -647,6 +647,7 @@ public final class ProjectModels {
             java.util.Map<String, Integer> rowHeights) {}
 
     // ── Project Budgets ────────────────────────────────────────────────────────
+    /** alocacaoPct: percentual de dedicacao do profissional no periodo (100 = integral). */
     public record ProjectBudgetActivity(
             String id,
             String nome,
@@ -654,7 +655,8 @@ public final class ProjectModels {
             Double horas,
             String dataInicio,
             String dataFim,
-            String cor) {}
+            String cor,
+            Double alocacaoPct) {}
 
     /** Custo de cloud lancado por mes; o total anual e mensal x mesesContratados. */
     public record ProjectBudgetCloudCost(
@@ -664,10 +666,12 @@ public final class ProjectModels {
             Double valorMensal,
             Integer mesesContratados) {}
 
+    /** dataBase: data de inicio do orcamento, usada como base das atividades. */
     public record ProjectBudget(
             String id,
             String nome,
             String descricao,
+            String dataBase,
             List<ProjectBudgetActivity> atividades,
             List<ProjectBudgetCloudCost> custosCloud,
             OffsetDateTime criadoEm,
@@ -676,6 +680,7 @@ public final class ProjectModels {
     public record CreateProjectBudgetRequest(
             String nome,
             String descricao,
+            String dataBase,
             List<ProjectBudgetActivity> atividades,
             List<ProjectBudgetCloudCost> custosCloud) {}
 
@@ -688,7 +693,8 @@ public final class ProjectModels {
             Double horas,
             Integer offsetDias,
             Integer duracaoDias,
-            String cor) {}
+            String cor,
+            Double alocacaoPct) {}
 
     public record ProjectBudgetTemplate(
             String id,
