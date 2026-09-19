@@ -127,7 +127,7 @@ public class HierarchyService {
             all.add(new HierarchyNode(
                     idMap.get(n.id()), n.tipo(), n.tipoRotulo(), n.nome(), n.descricao(),
                     novosPais.isEmpty() ? null : novosPais.get(0), novosPais, n.ordem(),
-                    n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(),
+                    n.membros(), n.loIds(), sanitizeCustosExtras(n.custosExtras()), n.projetoIds(), n.projetosOcultos(),
                     nova.id(), OffsetDateTime.now(), n.posX(), n.posY()));
         }
         saveNodes(all);
@@ -184,6 +184,7 @@ public class HierarchyService {
                 ordem,
                 sanitizeMembros(request.membros(), tipo),
                 sanitizeLoIds(request.loIds()),
+                sanitizeCustosExtras(request.custosExtras()),
                 sanitizeProjetoIds(request.projetoIds()),
                 sanitizeProjetoIds(request.projetosOcultos()),
                 viewId,
@@ -230,6 +231,7 @@ public class HierarchyService {
                     request.ordem() != null ? request.ordem() : n.ordem(),
                     sanitizeMembros(request.membros(), tipo),
                     sanitizeLoIds(request.loIds()),
+                    sanitizeCustosExtras(request.custosExtras()),
                     sanitizeProjetoIds(request.projetoIds()),
                     sanitizeProjetoIds(request.projetosOcultos()),
                     n.viewId(),
@@ -281,13 +283,13 @@ public class HierarchyService {
 
     private HierarchyNode withMembros(HierarchyNode n, List<HierarchyMember> membros) {
         return new HierarchyNode(n.id(), n.tipo(), n.tipoRotulo(), n.nome(), n.descricao(), n.parentId(), parentsOf(n), n.ordem(),
-                membros, n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm(), n.posX(), n.posY());
+                membros, n.loIds(), sanitizeCustosExtras(n.custosExtras()), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm(), n.posX(), n.posY());
     }
 
     private HierarchyNode withParents(HierarchyNode n, List<String> parents) {
         return new HierarchyNode(n.id(), n.tipo(), n.tipoRotulo(), n.nome(), n.descricao(),
                 parents.isEmpty() ? null : parents.get(0), parents, n.ordem(),
-                n.membros(), n.loIds(), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm(), n.posX(), n.posY());
+                n.membros(), n.loIds(), sanitizeCustosExtras(n.custosExtras()), n.projetoIds(), n.projetosOcultos(), n.viewId(), n.criadoEm(), n.posX(), n.posY());
     }
 
     private String norm(String value) {
@@ -428,6 +430,20 @@ public class HierarchyService {
             if (id == null || id.isBlank()) continue;
             String trimmed = id.trim();
             if (!out.contains(trimmed)) out.add(trimmed);
+        }
+        return out;
+    }
+
+    private List<HierarchyExtraCost> sanitizeCustosExtras(List<HierarchyExtraCost> custos) {
+        if (custos == null) return List.of();
+        List<HierarchyExtraCost> out = new ArrayList<>();
+        for (HierarchyExtraCost c : custos) {
+            if (c == null || c.nome() == null || c.nome().isBlank()) continue;
+            java.math.BigDecimal valor = c.valorMensal() == null ? java.math.BigDecimal.ZERO : c.valorMensal();
+            if (valor.compareTo(java.math.BigDecimal.ZERO) < 0) valor = java.math.BigDecimal.ZERO;
+            int meses = c.meses() == null ? 12 : Math.max(0, Math.min(120, c.meses()));
+            String id = c.id() == null || c.id().isBlank() ? UUID.randomUUID().toString() : c.id().trim();
+            out.add(new HierarchyExtraCost(id, c.nome().trim(), valor, meses));
         }
         return out;
     }

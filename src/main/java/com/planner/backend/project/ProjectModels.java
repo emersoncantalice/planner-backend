@@ -827,6 +827,7 @@ public final class ProjectModels {
             int ordem,
             java.util.List<HierarchyMember> membros,
             java.util.List<String> loIds,
+            java.util.List<HierarchyExtraCost> custosExtras,
             java.util.List<String> projetoIds,     // projetos vinculados (tribos/squads)
             java.util.List<String> projetosOcultos,// projetos vinculados porem ocultos neste time
             String viewId,                         // visao/cenario a que o no pertence (null = visao padrao)
@@ -853,11 +854,18 @@ public final class ProjectModels {
             Integer ordem,
             java.util.List<HierarchyMember> membros,
             java.util.List<String> loIds,
+            java.util.List<HierarchyExtraCost> custosExtras,
             java.util.List<String> projetoIds,
             java.util.List<String> projetosOcultos,
             String viewId,
             Double posX,
             Double posY) {}
+
+    public record HierarchyExtraCost(
+            String id,
+            String nome,
+            BigDecimal valorMensal,
+            Integer meses) {}
 
     public record MoveHierarchyMemberRequest(
             String fromNodeId,
