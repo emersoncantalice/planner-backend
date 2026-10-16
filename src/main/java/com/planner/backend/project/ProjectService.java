@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 @Service
 public class ProjectService {
     private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
+    private static final int MAX_FRENTE = 80;
     private final ProjectStorePort projectStorePort;
     private final java.nio.file.Path ganttConfigsPath;
     private final java.nio.file.Path projectBudgetsPath;
@@ -647,7 +648,7 @@ public class ProjectService {
             throw new IllegalArgumentException("Nome do orcamento e obrigatorio.");
         ProjectBudget created = new ProjectBudget(UUID.randomUUID().toString(), req.nome().trim(),
                 req.descricao(), req.dataBase(),
-                req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                normalizarAtividadesOrcamento(req.atividades()),
                 req.custosCloud() != null ? req.custosCloud() : new ArrayList<>(),
                 OffsetDateTime.now(), criadoPor);
         List<ProjectBudget> all = new ArrayList<>(loadProjectBudgets());
@@ -665,7 +666,7 @@ public class ProjectService {
             if (curr.id().equals(id)) {
                 ProjectBudget updated = new ProjectBudget(curr.id(), req.nome().trim(), req.descricao(),
                         req.dataBase(),
-                        req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                        normalizarAtividadesOrcamento(req.atividades()),
                         req.custosCloud() != null ? req.custosCloud() : new ArrayList<>(),
                         curr.criadoEm(), curr.criadoPor());
                 all.set(i, updated);
@@ -695,7 +696,7 @@ public class ProjectService {
             throw new IllegalArgumentException("Nome do template e obrigatorio.");
         ProjectBudgetTemplate created = new ProjectBudgetTemplate(UUID.randomUUID().toString(), req.nome().trim(),
                 req.descricao(),
-                req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                normalizarAtividadesTemplate(req.atividades()),
                 OffsetDateTime.now(), criadoPor);
         List<ProjectBudgetTemplate> all = new ArrayList<>(loadProjectBudgetTemplates());
         all.add(created);
@@ -712,7 +713,7 @@ public class ProjectService {
             ProjectBudgetTemplate curr = all.get(i);
             if (curr.id().equals(id)) {
                 ProjectBudgetTemplate updated = new ProjectBudgetTemplate(curr.id(), req.nome().trim(), req.descricao(),
-                        req.atividades() != null ? req.atividades() : new ArrayList<>(),
+                        normalizarAtividadesTemplate(req.atividades()),
                         curr.criadoEm(), curr.criadoPor());
                 all.set(i, updated);
                 saveProjectBudgetTemplates(all);
@@ -727,6 +728,38 @@ public class ProjectService {
         boolean removed = all.removeIf(t -> t.id().equals(id));
         if (!removed) throw new IllegalArgumentException("Template nao encontrado.");
         saveProjectBudgetTemplates(all);
+    }
+
+    /** Frente e um agrupador livre: aparada, vazia vira null e com tamanho limitado. */
+    private static String normalizarFrente(String frente) {
+        if (frente == null || frente.isBlank()) return null;
+        String f = frente.trim();
+        if (f.length() > MAX_FRENTE)
+            throw new IllegalArgumentException("Frente deve ter no maximo " + MAX_FRENTE + " caracteres.");
+        return f;
+    }
+
+    private static List<ProjectBudgetActivity> normalizarAtividadesOrcamento(List<ProjectBudgetActivity> atividades) {
+        if (atividades == null) return new ArrayList<>();
+        List<ProjectBudgetActivity> out = new ArrayList<>(atividades.size());
+        for (ProjectBudgetActivity a : atividades) {
+            if (a == null) continue;
+            out.add(new ProjectBudgetActivity(a.id(), a.nome(), a.perfilId(), a.horas(), a.dataInicio(), a.dataFim(),
+                    a.cor(), a.alocacaoPct(), normalizarFrente(a.frente())));
+        }
+        return out;
+    }
+
+    private static List<ProjectBudgetTemplateActivity> normalizarAtividadesTemplate(
+            List<ProjectBudgetTemplateActivity> atividades) {
+        if (atividades == null) return new ArrayList<>();
+        List<ProjectBudgetTemplateActivity> out = new ArrayList<>(atividades.size());
+        for (ProjectBudgetTemplateActivity a : atividades) {
+            if (a == null) continue;
+            out.add(new ProjectBudgetTemplateActivity(a.id(), a.nome(), a.perfilId(), a.horas(), a.offsetDias(),
+                    a.duracaoDias(), a.cor(), a.alocacaoPct(), normalizarFrente(a.frente())));
+        }
+        return out;
     }
 
     // ── I/O helpers ───────────────────────────────────────────────────────────
